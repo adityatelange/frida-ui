@@ -2,6 +2,8 @@
 
 A modern, web-based user interface for [Frida](https://frida.re/), allowing you to interact with devices, processes, and scripts directly from your browser.
 
+![](https://raw.githubusercontent.com/adityatelange/frida-ui/refs/heads/main/assets/dashboard.png)
+
 ## Features
 
 ### 📱 Device Management
