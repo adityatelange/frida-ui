@@ -14,6 +14,7 @@ setup(
     long_description=desc,
     long_description_content_type="text/markdown",
     author="adityatelange",
+    license="MIT",
     url="https://github.com/adityatelange/frida-ui",
     download_url="https://github.com/adityatelange/frida-ui/archive/v%s.zip"
     % __import__("frida_ui").__version__,
