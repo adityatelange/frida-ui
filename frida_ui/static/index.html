@@ -15,22 +15,35 @@
             <select id="devices">
                 <option disabled selected>Loading devices...</option>
             </select>
-            <button id="refreshDevices" title="Refresh Devices">↻</button>
-            <button id="disconnectRemoteBtn" class="secondary hidden" title="Disconnect Remote Device">✕
-                Disconnect</button>
-            <button id="toggleRemoteBtn" title="Add Remote Device">+ Remote</button>
+            <button id="refreshDevices" title="Refresh Devices">
+                ↻
+            </button>
+            <button id="disconnectRemoteBtn" class="secondary hidden" title="Disconnect Remote Device">
+                ✕ Disconnect
+            </button>
+            <button id="toggleRemoteBtn" title="Add Remote Device">
+                + Remote
+            </button>
             <div id="remoteForm" class="remote-form">
                 <input type="text" id="remoteHost" placeholder="192.168.1.100" title="Host/IP" />
                 <input type="number" id="remotePort" value="27042" placeholder="Port" title="Port" />
-                <button id="connectRemoteBtn" title="Connect">Connect</button>
-                <button id="cancelRemoteBtn" title="Close">✕</button>
+                <button id="connectRemoteBtn" title="Connect">
+                    Connect
+                </button>
+                <button id="cancelRemoteBtn" title="Close">
+                    ✕
+                </button>
             </div>
         </div>
         <div class="header-links">
             <a href="https://codeshare.frida.re/browse" target="_blank" rel="noopener" class="btn secondary"
-                title="Browse CodeShare">CodeShare ↗</a>
+                title="Browse CodeShare">
+                CodeShare ↗
+            </a>
             <a href="https://github.com/adityatelange/frida-ui" target="_blank" rel="noopener" class="btn secondary"
-                title="Browse Source Code on Github">Github ↗</a>
+                title="Browse Source Code on Github">
+                Github ↗
+            </a>
         </div>
     </header>
 
@@ -38,11 +51,11 @@
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <input type="text" id="appSearch" class="search-box" placeholder="Search apps...">
-                <button id="refreshApps" title="Refresh Apps">↻</button>
+                <button id="refreshApps" title="Refresh Apps">
+                    ↻
+                </button>
             </div>
-            <div id="appList" class="app-list">
-                <!-- App items injected here -->
-            </div>
+            <div id="appList" class="app-list"></div>
         </div>
         <div class="resizer-h" id="sidebarResizer"></div>
 
@@ -64,11 +77,15 @@
                     <div class="actions">
                         <button id="attachBtn" class="primary"
                             title="Attach to the selected application">Attach</button>
-                        <button id="spawnBtn" class="primary" title="Spawn and attach to the selected application">Spawn
-                            &amp;
-                            Attach</button>
-                        <button id="killBtn" class="hidden danger" title="Kill the current process">Kill</button>
-                        <button id="detachBtn" class="hidden" title="Detach from the current session">Detach</button>
+                        <button id="spawnBtn" class="primary" title="Spawn and attach to the selected application">
+                            Spawn &amp; Attach
+                        </button>
+                        <button id="killBtn" class="hidden danger" title="Kill the current process">
+                            Kill
+                        </button>
+                        <button id="detachBtn" class="hidden" title="Detach from the current session">
+                            Detach
+                        </button>
                     </div>
                 </div>
 
@@ -85,15 +102,15 @@
 
                 <div class="resizer-v" id="editorResizer"></div>
 
-                <!-- Controls Area (moved out of editor-container) -->
                 <div id="controlsArea">
-
                     <!-- CodeShare Manager -->
                     <div class="codeshare-manager">
                         <div class="panel-title">CodeShare Queue</div>
                         <div class="codeshare-input-row">
                             <input id="codeshareUri" placeholder="URI (e.g. frida/android-ssl-pinning)" />
-                            <button id="addCodeshareBtn" title="Add URI to CodeShare queue" type="button">Add</button>
+                            <button id="addCodeshareBtn" title="Add URI to CodeShare queue" type="button">
+                                Add
+                            </button>
                         </div>
                         <div id="codeshareList"></div>
                     </div>
@@ -102,10 +119,12 @@
                     <div class="manual-controls">
                         <input id="loadFileInput" type="file" accept=".js,.txt" />
                         <div class="file-controls">
-                            <button id="loadFileBtn" title="Load script from file">Load File</button>
+                            <button id="loadFileBtn" title="Load script from file">
+                                Load File
+                            </button>
                         </div>
-                        <button id="spawnRunBtn" class="primary"
-                            title="Spawn the app, attach, and run the loaded scripts" aria-label="Spawn, Attach & Run">
+                        <button id="spawnRunBtn" class="primary" aria-label="Spawn, Attach & Run"
+                            title="Spawn the app, attach, and run the loaded scripts">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                 fill="currentColor" aria-hidden="true" focusable="false">
                                 <path d="M8 5v14l11-7z" />
@@ -126,9 +145,15 @@
 
                 <div class="console-container" id="consoleContainer">
                     <div class="console-header">
-                        <div>Console Output <button id="downloadConsoleBtn" class="icon-btn console-btn"
-                                title="Download console">Download Logs</button></div>
-                        <button id="clearConsoleBtn" class="icon-btn console-btn" title="Clear console">Clear</button>
+                        <div>
+                            Console Output
+                            <button id="downloadConsoleBtn" class="icon-btn console-btn" title="Download console">
+                                Download Logs
+                            </button>
+                        </div>
+                        <button id="clearConsoleBtn" class="icon-btn console-btn" title="Clear console">
+                            Clear
+                        </button>
                     </div>
                     <div id="consoleOutput" class="console-output"></div>
                 </div>
