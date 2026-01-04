@@ -610,6 +610,7 @@ textarea#scriptArea:focus+.editor-hint {
     min-height: 150px;
 }
 
+/* CodeShare Manager */
 .codeshare-manager {
     flex: 1;
     display: flex;
@@ -646,30 +647,6 @@ textarea#scriptArea:focus+.editor-hint {
     gap: 5px;
 }
 
-.manual-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    min-width: 180px;
-    justify-content: flex-end;
-}
-
-.file-controls {
-    display: none;
-}
-
-/* Hidden by default elements */
-#loadFileInput,
-#loadFileBtn {
-    display: none;
-}
-
-#spawnRunBtn {
-    display: flex;
-    gap: 5px;
-}
-
-/* CodeShare List Items */
 .codeshare-item {
     display: flex;
     justify-content: space-between;
@@ -687,6 +664,26 @@ textarea#scriptArea:focus+.editor-hint {
 
 .btn-delete {
     color: var(--warning-color);
+}
+
+/* Manual Script Controls */
+.manual-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 180px;
+    justify-content: flex-end;
+}
+
+.file-controls,
+#loadFileInput,
+#loadFileBtn {
+    display: none;
+}
+
+#spawnRunBtn {
+    display: flex;
+    gap: 5px;
 }
 
 /* Device Info Panel */
