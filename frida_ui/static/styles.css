@@ -427,7 +427,7 @@ textarea#scriptArea:focus+.editor-hint {
 
 .icon-btn {
     font-size: 12px;
-    margin: 2px;
+    padding: 4px 8px;
     background: var(--btn-bg);
     border: none;
     color: var(--text-inverse);
@@ -641,6 +641,11 @@ textarea#scriptArea:focus+.editor-hint {
     border-radius: 3px;
 }
 
+.codeshare-controls {
+    display: flex;
+    gap: 5px;
+}
+
 .manual-controls {
     display: flex;
     flex-direction: column;
@@ -670,7 +675,7 @@ textarea#scriptArea:focus+.editor-hint {
     justify-content: space-between;
     align-items: center;
     background: var(--item-bg);
-    padding: 2px 5px;
+    padding: 5px;
     margin-bottom: 2px;
     border-radius: 2px;
 }

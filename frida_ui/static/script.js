@@ -842,6 +842,7 @@ function renderCodeshareQueue() {
         span.className = 'codeshare-uri';
 
         const controls = document.createElement('div');
+        controls.className = 'codeshare-controls';
 
         const upBtn = document.createElement('button');
         upBtn.textContent = '⬆';
