@@ -266,6 +266,7 @@ button.danger:hover {
     display: flex;
     flex-direction: column;
     background: var(--bg-color);
+    min-width: 0;
 }
 
 .empty-state {
