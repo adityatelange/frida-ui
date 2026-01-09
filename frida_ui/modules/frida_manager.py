@@ -93,18 +93,17 @@ class FridaManager:
             params = {}
             try:
                 params = d.query_system_parameters()
+                devices.append(
+                    {
+                        "id": d.id,
+                        "name": d.name,
+                        "type": str(d.type),
+                        "can_disconnect": d.id in remote_ids,
+                        "parameters": params,
+                    }
+                )
             except Exception:
                 pass
-
-            devices.append(
-                {
-                    "id": d.id,
-                    "name": d.name,
-                    "type": str(d.type),
-                    "can_disconnect": d.id in remote_ids,
-                    "parameters": params,
-                }
-            )
 
         def sort_key(d):
             # 1. Active session? (0=Yes, 1=No)
