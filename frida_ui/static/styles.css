@@ -428,13 +428,14 @@ textarea#scriptArea:focus+.editor-hint {
 
 .icon-btn {
     font-size: 12px;
-    padding: 4px 8px;
+    padding: 5px 10px;
     background: var(--btn-bg);
     border: none;
     color: var(--text-inverse);
     cursor: pointer;
     border-radius: 3px;
     min-height: auto;
+    line-height: 1;
 }
 
 .icon-btn:hover {
