@@ -242,8 +242,10 @@ def main():
     args = parser.parse_args()
 
     print(
-        f"Starting frida-ui on http://{args.host}:{args.port} (press CTRL+C to stop){' with reload' if args.reload else ''}"
+        f"[+] Starting frida-ui on http://{args.host}:{args.port} {'with reload' if args.reload else ''}"
     )
+    print(f"[+] Using Frida version: {frida_mgr.version}")
+    print("[+] Press CTRL+C to stop the server")
 
     log_level = "debug" if args.reload else "info"
     uvicorn.run(

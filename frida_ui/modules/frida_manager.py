@@ -16,6 +16,7 @@ class FridaManager:
     """Manages Frida devices, sessions, and scripts."""
 
     def __init__(self):
+        self.version = frida.__version__
         self.sessions: Dict[str, Any] = {}
         self.scripts: Dict[str, Any] = {}
         self.message_queues: Dict[str, List[dict]] = {}
