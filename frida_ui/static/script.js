@@ -827,12 +827,12 @@ function downloadConsole() {
 function renderCodeshareQueue() {
     const list = els.codeshareList;
     list.innerHTML = '';
-    
+
     if (codeshareQueue.length === 0) {
         list.innerHTML = '<div class="status-msg">No scripts in queue. Add a CodeShare URI above.</div>';
         return;
     }
-    
+
     codeshareQueue.forEach((uri, index) => {
         const div = document.createElement('div');
         div.className = 'codeshare-item';
@@ -1024,8 +1024,8 @@ els.connectRemoteBtn.onclick = addRemoteDevice;
 els.cancelRemoteBtn.onclick = closeRemoteForm;
 els.disconnectRemoteBtn.onclick = disconnectRemoteDevice;
 // Enter key in remote inputs
-els.remoteHost.onkeypress = (e) => { if (e.key === 'Enter') addRemoteDevice(); };
-els.remotePort.onkeypress = (e) => { if (e.key === 'Enter') addRemoteDevice(); };
+els.remoteHost.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addRemoteDevice(); } });
+els.remotePort.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addRemoteDevice(); } });
 // Refresh apps list button
 els.refreshApps.onclick = loadApps;
 els.attachBtn.onclick = doAttach;
@@ -1126,7 +1126,7 @@ if (els.loadFileBtn && els.loadFileInput) {
 // CodeShare listeners
 els.addCodeshareBtn.onclick = addCodeshare;
 els.loadCodeshareSequenceBtn.onclick = loadCodeshareSequence;
-els.codeshareUri.onkeypress = (e) => { if (e.key === 'Enter') addCodeshare(); };
+els.codeshareUri.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCodeshare(); } });
 
 // Init
 renderCodeshareQueue();
