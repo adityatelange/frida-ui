@@ -41,7 +41,9 @@ const els = {
     killBtn: document.getElementById('killBtn'),
     detachBtn: document.getElementById('detachBtn'),
     spawnRunBtn: document.getElementById('spawnRunBtn'),
+    editorContainer: document.getElementById('editorContainer'),
     scriptArea: document.getElementById('scriptArea'),
+    scriptEditor: document.getElementById('scriptEditor'),
     loadFileBtn: document.getElementById('loadFileBtn'),
     loadFileInput: document.getElementById('loadFileInput'),
     loadedFilename: document.getElementById('loadedFilename'),
@@ -1116,61 +1118,116 @@ if (els.loadFileBtn && els.loadFileInput) {
         try {
             const text = await f.text();
             els.scriptArea.value = text;
+            if (monacoEditor) monacoEditor.setValue(text);
             if (els.loadedFilename) {
                 els.loadedFilename.textContent = f.name;
                 els.loadedFilename.classList.remove('hidden');
             }
             logConsole('System', `Loaded file: ${f.name}`);
+            updateEditorHint();
         } catch (err) {
             logConsole('Error', `Failed to read file: ${err.message}`);
         }
     };
 
-    // Drag & Drop support on editor container
-    const editorContainer = document.querySelector('.editor-container');
-    if (editorContainer) {
-        editorContainer.addEventListener('dragenter', (ev) => { ev.preventDefault(); if (els.scriptArea) els.scriptArea.classList.add('dragover'); });
-        editorContainer.addEventListener('dragover', (ev) => { ev.preventDefault(); if (els.scriptArea) els.scriptArea.classList.add('dragover'); });
-        editorContainer.addEventListener('dragleave', (ev) => { ev.preventDefault(); if (els.scriptArea) els.scriptArea.classList.remove('dragover'); });
-        editorContainer.addEventListener('drop', async (ev) => {
-            ev.preventDefault();
-            if (els.scriptArea) els.scriptArea.classList.remove('dragover');
-            const files = ev.dataTransfer && ev.dataTransfer.files;
-            if (!files || files.length === 0) return;
-            const f = files[0];
-            try {
-                const text = await f.text();
-                els.scriptArea.value = text;
-                if (els.loadedFilename) {
-                    els.loadedFilename.textContent = f.name;
-                    els.loadedFilename.classList.remove('hidden');
-                }
-                logConsole('System', `Loaded file via drag-and-drop: ${f.name}`);
-                updateEditorHint();
-            } catch (err) {
-                logConsole('Error', `Failed to read dropped file: ${err.message}`);
+    if (els.editorContainer) els.editorContainer.addEventListener('dragenter', (ev) => { ev.preventDefault(); if (els.scriptArea) els.scriptArea.classList.add('dragover'); if (els.scriptEditor) els.scriptEditor.classList.add('dragover'); });
+    if (els.editorContainer) els.editorContainer.addEventListener('dragover', (ev) => { ev.preventDefault(); if (els.scriptArea) els.scriptArea.classList.add('dragover'); if (els.scriptEditor) els.scriptEditor.classList.add('dragover'); });
+    if (els.editorContainer) els.editorContainer.addEventListener('dragleave', (ev) => { ev.preventDefault(); if (els.scriptArea) els.scriptArea.classList.remove('dragover'); if (els.scriptEditor) els.scriptEditor.classList.remove('dragover'); });
+    if (els.editorContainer) els.editorContainer.addEventListener('drop', async (ev) => {
+        ev.preventDefault();
+        if (els.scriptArea) els.scriptArea.classList.remove('dragover');
+        if (els.scriptEditor) els.scriptEditor.classList.remove('dragover');
+        const files = ev.dataTransfer && ev.dataTransfer.files;
+        if (!files || files.length === 0) return;
+        const f = files[0];
+        try {
+            const text = await f.text();
+            els.scriptArea.value = text;
+            if (monacoEditor) monacoEditor.setValue(text);
+            if (els.loadedFilename) {
+                els.loadedFilename.textContent = f.name;
+                els.loadedFilename.classList.remove('hidden');
             }
-        });
+            logConsole('System', `Loaded file via drag-and-drop: ${f.name}`);
+            updateEditorHint();
+        } catch (err) {
+            logConsole('Error', `Failed to read dropped file: ${err.message}`);
+        }
+    });
 
-        // Show hint when editor is empty; hide it on input or dragover
-        function updateEditorHint() {
-            if (!els.scriptArea) return;
-            if (els.scriptArea.value && els.scriptArea.value.trim().length > 0) {
-                editorContainer.classList.add('has-content');
-            } else {
-                editorContainer.classList.remove('has-content');
-                if (els.loadedFilename) {
-                    els.loadedFilename.textContent = '';
-                    els.loadedFilename.classList.add('hidden');
-                }
+    // Show hint when editor is empty; hide it on input or dragover
+    function updateEditorHint() {
+        if (!els.scriptArea) return;
+        if (els.scriptArea.value && els.scriptArea.value.trim().length > 0) {
+            if (els.editorContainer) els.editorContainer.classList.add('has-content');
+        } else {
+            if (els.editorContainer) els.editorContainer.classList.remove('has-content');
+            if (els.loadedFilename) {
+                els.loadedFilename.textContent = '';
+                els.loadedFilename.classList.add('hidden');
             }
         }
-        els.scriptArea.addEventListener('input', updateEditorHint);
-        // initialize hint state
-        updateEditorHint();
     }
+    els.scriptArea.addEventListener('input', updateEditorHint);
+    // initialize hint state
+    updateEditorHint();
+}
 
 
+// Monaco Editor integration
+let monacoEditor = null;
+function loadMonaco() {
+    return new Promise((resolve, reject) => {
+        if (window.require && window.monaco) return resolve();
+        const loader = document.createElement('script');
+        loader.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.40.0/min/vs/loader.min.js';
+        loader.onload = () => {
+            // Configure AMD loader to use CDN path
+            require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.40.0/min/vs' } });
+            require(['vs/editor/editor.main'], () => resolve(), reject);
+        };
+        loader.onerror = reject;
+        document.head.appendChild(loader);
+    });
+}
+
+function setupMonacoEditor() {
+    if (!els.scriptEditor) return;
+    loadMonaco().then(() => {
+        monacoEditor = monaco.editor.create(els.scriptEditor, {
+            value: els.scriptArea.value || '',
+            language: 'javascript',
+            automaticLayout: true,
+            minimap: { enabled: false },
+            fontSize: 13,
+            theme: 'vs-dark',
+            scrollBeyondLastLine: false,
+        });
+        // Sync Monaco -> textarea
+        monacoEditor.getModel().onDidChangeContent(() => {
+            const text = monacoEditor.getValue();
+            const ta = els.scriptArea;
+            if (ta) ta.value = text;
+            updateEditorHint();
+        });
+        // Show the Monaco editor and hide the fallback textarea
+        const ta = els.scriptArea;
+        try {
+            els.scriptEditor.classList.remove('hidden');
+            if (ta) ta.classList.add('hidden');
+        } catch (err) { /* ignore */ }
+
+        updateEditorHint();
+    }).catch(e => {
+        console.warn('Failed to load Monaco editor', e);
+        // Ensure fallback textarea is visible
+        const ta = els.scriptArea;
+        try {
+            if (ta) ta.classList.remove('hidden');
+            els.scriptEditor.classList.add('hidden');
+        } catch (err) { /* ignore */ }
+        try { logConsole('System', 'Monaco editor failed to load; falling back to plain textarea'); } catch (err) { /* log might not be ready */ }
+    });
 }
 
 // CodeShare listeners
@@ -1180,6 +1237,7 @@ els.codeshareUri.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e
 
 // Init
 renderCodeshareQueue();
+setupMonacoEditor();
 loadDevices();
 
 // --- Resizing Logic ---

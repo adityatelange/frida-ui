@@ -351,6 +351,20 @@ textarea#scriptArea.dragover {
     background: var(--accent-faint);
 }
 
+#scriptEditor {
+    flex: 1;
+    min-height: 50px;
+    box-sizing: border-box;
+    border-radius: 3px;
+    resize: none;
+    overflow: auto;
+}
+
+#scriptEditor.dragover {
+    border: 2px dashed var(--accent-color);
+    background: var(--accent-faint);
+}
+
 /* .editor-container { position: relative; } Removed as we use wrapper now */
 .editor-hint {
     position: absolute;
@@ -372,11 +386,14 @@ textarea#scriptArea.dragover {
     display: none;
 }
 
-textarea#scriptArea.dragover+.editor-hint {
+textarea#scriptArea.dragover+.editor-hint,
+#scriptEditor.dragover+.editor-hint {
     display: none;
 }
 
-textarea#scriptArea:focus+.editor-hint {
+textarea#scriptArea:focus+.editor-hint,
+#scriptEditor:focus+.editor-hint,
+.editor-wrapper:focus-within .editor-hint {
     display: none;
 }
 
