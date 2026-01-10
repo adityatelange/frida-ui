@@ -959,14 +959,14 @@ function addCodeshare() {
 
     codeshareQueue.push(uri);
     input.value = '';
-    renderCodeshareQueue();
     saveCodeshareQueue();
+    renderCodeshareQueue();
 }
 
 function removeCodeshare(index) {
     codeshareQueue.splice(index, 1);
-    renderCodeshareQueue();
     saveCodeshareQueue();
+    renderCodeshareQueue();
 }
 
 function moveCodeshare(index, direction) {
@@ -974,8 +974,8 @@ function moveCodeshare(index, direction) {
     if (newIndex < 0 || newIndex >= codeshareQueue.length) return;
     const item = codeshareQueue.splice(index, 1)[0];
     codeshareQueue.splice(newIndex, 0, item);
-    renderCodeshareQueue();
     saveCodeshareQueue();
+    renderCodeshareQueue();
 }
 
 async function loadCodeshareSequence() {
