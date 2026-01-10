@@ -772,3 +772,13 @@ textarea#scriptArea:focus+.editor-hint,
     font-weight: 500;
     margin-top: 10px;
 }
+
+/* Console-only mode: hide editor, sidebars, controls and resizers; expand console */
+body.console-only #sidebar,
+body.console-only #sidebarResizer,
+body.console-only #editorContainer,
+body.console-only #editorResizer,
+body.console-only #controlsArea,
+body.console-only #consoleResizer {
+    display: none !important;
+}

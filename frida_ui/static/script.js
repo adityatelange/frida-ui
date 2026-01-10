@@ -52,6 +52,7 @@ const els = {
     consoleOutput: document.getElementById('consoleOutput'),
     clearConsoleBtn: document.getElementById('clearConsoleBtn'),
     downloadConsoleBtn: document.getElementById('downloadConsoleBtn'),
+    toggleConsoleBtn: document.getElementById('toggleConsoleBtn'),
     remoteForm: document.getElementById('remoteForm'),
     remoteHost: document.getElementById('remoteHost'),
     remotePort: document.getElementById('remotePort'),
@@ -1103,7 +1104,9 @@ document.addEventListener('keydown', (e) => {
         const remoteForm = els.remoteForm;
         if (remoteForm && remoteForm.classList.contains('show')) {
             closeRemoteForm();
-        } else {
+        } else if (document.body.classList.contains('console-only')) {
+            setConsoleMode(false);
+        } else if (selectedApp) {
             deselectApp();
         }
     }
@@ -1239,6 +1242,42 @@ els.codeshareUri.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e
 renderCodeshareQueue();
 setupMonacoEditor();
 loadDevices();
+
+// Expandable Console Mode
+function setConsoleMode(enabled) {
+    const consoleEl = document.getElementById('consoleContainer');
+    const btn = els.toggleConsoleBtn;
+
+    if (enabled) {
+        consoleEl.dataset.savedHeight = consoleEl.style.height || '';
+        consoleEl.dataset.savedFlex = consoleEl.style.flex || '';
+        consoleEl.style.height = '';
+        consoleEl.style.flex = '1 1 100%';
+    } else {
+        if ('savedHeight' in consoleEl.dataset) {
+            consoleEl.style.height = consoleEl.dataset.savedHeight;
+            delete consoleEl.dataset.savedHeight;
+        }
+        if ('savedFlex' in consoleEl.dataset) {
+            consoleEl.style.flex = consoleEl.dataset.savedFlex;
+            delete consoleEl.dataset.savedFlex;
+        }
+    }
+
+    document.body.classList.toggle('console-only', enabled);
+    btn.setAttribute('aria-pressed', String(enabled));
+    btn.textContent = enabled ? '🗗' : '🗖';
+    btn.title = enabled ? 'Exit Expanded Console' : 'Expand Console';
+    btn.setAttribute('aria-label', enabled ? 'Exit Expanded Console' : 'Expand Console');
+}
+
+function toggleConsoleMode() {
+    const enabled = !document.body.classList.contains('console-only');
+    setConsoleMode(enabled);
+}
+
+// Bind console toggle
+els.toggleConsoleBtn.addEventListener('click', toggleConsoleMode);
 
 // --- Resizing Logic ---
 function setupResizer(resizerId, targetId, direction, property, invert = false, minSize = 50, maxSize = null) {
