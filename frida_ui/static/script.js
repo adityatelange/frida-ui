@@ -336,6 +336,26 @@ function deselectApp() {
     }
 }
 
+function _renderIcon(rawByteString) {
+    const arr = JSON.parse(rawByteString);
+    const bytes = new Uint8ClampedArray(arr);
+
+    if (bytes.length !== 16 * 16 * 4) {
+        return null; // Invalid icon size
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 16;
+    canvas.height = 16;
+    const ctx = canvas.getContext('2d');
+    const imageData = new ImageData(bytes, 16, 16);
+    ctx.putImageData(imageData, 0, 0);
+    const dataUrl = canvas.toDataURL("image/png");
+    canvas.remove(); // Clean up
+
+    return dataUrl;
+}
+
 async function updateDeviceInfo(devId) {
     const infoPanel = els.deviceInfo;
     if (!infoPanel) return;
@@ -345,16 +365,24 @@ async function updateDeviceInfo(devId) {
         if (!info) return;
         const params = info.parameters || {};
 
+        // Render icon
+        let iconDataUrl = null;
+        if (info.icon) {
+            iconDataUrl = _renderIcon(info.icon);
+        }
+
         let html = `
             <div class="device-info-header">
-                <div class="device-info-title">${escapeHtml(info.name)}</div>
-                <span class="badge">${escapeHtml(info.type)}</span>
+            <div class="device-info-title">${escapeHtml(info.name)}</div>
+            ${iconDataUrl ? `<span class="badge">
+                <img src="${iconDataUrl}" alt="icon" class="device-icon" />
+            </span>` : ''}
             </div>
             <table class="device-info-table">
-                <tr>
-                    <td>Device ID</td>
-                    <td>${escapeHtml(info.id)}</td>
-                </tr>
+            <tr>
+                <td>Device ID</td>
+                <td>${escapeHtml(info.id)}</td>
+            </tr>
         `;
 
         // Platform & Arch
