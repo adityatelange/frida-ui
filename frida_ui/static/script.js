@@ -42,6 +42,7 @@ const els = {
     detachBtn: document.getElementById('detachBtn'),
     spawnRunBtn: document.getElementById('spawnRunBtn'),
     editorContainer: document.getElementById('editorContainer'),
+    toggleEditorBtn: document.getElementById('toggleEditorBtn'),
     scriptArea: document.getElementById('scriptArea'),
     scriptEditor: document.getElementById('scriptEditor'),
     loadFileBtn: document.getElementById('loadFileBtn'),
@@ -1104,6 +1105,8 @@ document.addEventListener('keydown', (e) => {
         const remoteForm = els.remoteForm;
         if (remoteForm && remoteForm.classList.contains('show')) {
             closeRemoteForm();
+        } else if (document.body.classList.contains('editor-only')) {
+            setEditorMode(false);
         } else if (document.body.classList.contains('console-only')) {
             setConsoleMode(false);
         } else if (selectedApp) {
@@ -1278,6 +1281,42 @@ function toggleConsoleMode() {
 
 // Bind console toggle
 els.toggleConsoleBtn.addEventListener('click', toggleConsoleMode);
+
+// Expandable Editor Mode
+function setEditorMode(enabled) {
+    const editorEl = document.getElementById('editorContainer');
+    const btn = els.toggleEditorBtn;
+
+    if (enabled) {
+        editorEl.dataset.savedHeight = editorEl.style.height || '';
+        editorEl.dataset.savedFlex = editorEl.style.flex || '';
+        editorEl.style.height = '';
+        editorEl.style.flex = '1 1 100%';
+    } else {
+        if ('savedHeight' in editorEl.dataset) {
+            editorEl.style.height = editorEl.dataset.savedHeight;
+            delete editorEl.dataset.savedHeight;
+        }
+        if ('savedFlex' in editorEl.dataset) {
+            editorEl.style.flex = editorEl.dataset.savedFlex;
+            delete editorEl.dataset.savedFlex;
+        }
+    }
+
+    document.body.classList.toggle('editor-only', enabled);
+    btn.setAttribute('aria-pressed', String(enabled));
+    btn.textContent = enabled ? '🗗' : '🗖';
+    btn.title = enabled ? 'Exit Expanded Editor' : 'Expand Editor';
+    btn.setAttribute('aria-label', enabled ? 'Exit Expanded Editor' : 'Expand Editor');
+}
+
+function toggleEditorMode() {
+    const enabled = !document.body.classList.contains('editor-only');
+    setEditorMode(enabled);
+}
+
+// Bind editor toggle
+els.toggleEditorBtn.addEventListener('click', toggleEditorMode);
 
 // --- Resizing Logic ---
 function setupResizer(resizerId, targetId, direction, property, invert = false, minSize = 50, maxSize = null) {

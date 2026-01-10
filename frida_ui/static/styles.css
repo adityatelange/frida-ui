@@ -782,3 +782,13 @@ body.console-only #controlsArea,
 body.console-only #consoleResizer {
     display: none !important;
 }
+
+/* Editor-only mode: hide console, sidebars, controls and resizers; expand editor */
+body.editor-only #sidebar,
+body.editor-only #sidebarResizer,
+body.editor-only #editorResizer,
+body.editor-only #consoleContainer,
+body.editor-only #controlsArea,
+body.editor-only #consoleResizer {
+    display: none !important;
+}
