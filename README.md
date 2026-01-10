@@ -1,4 +1,4 @@
-# frida-ui
+# Frida UI
 
 A modern, lightweight, web-based user interface for [Frida](https://frida.re/), designed for **Android application penetration testing**. It allows you to interact with devices, processes, and scripts directly from your browser.
 
@@ -7,8 +7,13 @@ A modern, lightweight, web-based user interface for [Frida](https://frida.re/), 
 ## Quick Start
 
 ```sh
-uv tool install frida-ui # Install
-frida-ui               # Start server
+# Install using uv (recommended) or pipx/pip
+uv tool install frida-ui
+# Or: pipx install frida-ui
+# Or: pip install frida-ui
+
+# Start the server
+frida-ui
 ```
 
 Open your browser and navigate to: `http://localhost:8000`
@@ -33,8 +38,9 @@ Open your browser and navigate to: `http://localhost:8000`
 
 ### 💻 Scripting & Instrumentation
 
-- **Script Editor**: Built-in editor for writing Frida scripts.
+- **Script Editor**: Built-in editor for writing Frida scripts. Includes an optional [**Monaco** editor](https://microsoft.github.io/monaco-editor/) for richer editing (syntax highlighting and automatic layout) with a graceful fallback to a plain textarea.
 - **File Loading**: Load scripts from local files or drag-and-drop `.js` files into the editor.
+- **Download script**: Export the current editor content as a `.js` file (`frida-ui_<app id>_<timestamp>.js`) directly from the editor header.
 - **CodeShare Integration**:
   - Import scripts directly from [Frida CodeShare](https://codeshare.frida.re/).
   - Create a "Queue" of CodeShare scripts to inject sequentially.
@@ -48,8 +54,10 @@ Open your browser and navigate to: `http://localhost:8000`
 ### 🎨 UI/UX
 
 - **Dark Theme**: Clean, consistent dark mode interface.
-- **Persistence**: Remembers your selected device, application, and window sizes.
+- **Persistence**: Remembers your selected device, application, and pane sizes across sessions.
 - **Responsive**: Adjustable panes for sidebar, editor, and console.
+- **Focus Modes**: Toggle **Editor-only** or **Console-only** views to hide other panes for a distraction-free workflow.
+- **Accessibility**: Keyboard shortcuts (e.g., `Escape` to reset view or close overlays) and ARIA support.
 
 ## Getting Started
 
@@ -98,7 +106,7 @@ uv tool install . --with frida==16.7.19
 
 ### Running
 
-Start the server:
+Start the server using the default configuration:
 
 ```bash
 frida-ui
@@ -174,6 +182,23 @@ Alternatively, you can run `frida-server` with a network listener and connect re
    - Click **Spawn & Run** to start the app with your script injected immediately.
 5. **Monitor**: Watch the console for output.
 
+### 💡 Example Script
+
+Try this simple script to hook a method (replace with your target):
+
+```javascript
+// Simple method hook example
+Java.perform(() => {
+  const MainActivity = Java.use("com.example.app.MainActivity");
+  MainActivity.checkPassword.implementation = function (password) {
+    console.log("[*] checkPassword called with: " + password);
+    return true; // Bypass check
+  };
+});
+```
+
+---
+
 ## Notes
 
 > [!NOTE]
@@ -181,3 +206,12 @@ Alternatively, you can run `frida-server` with a network listener and connect re
 
 > [!WARNING]
 > This tool allows executing arbitrary JavaScript in target processes. Only expose frida-ui to trusted networks and users. Executing untrusted scripts can compromise your system and data. The web server runs locally by default but exposes powerful instrumentation capabilities.
+
+## Credits
+
+- Frida Project - [https://frida.re/](https://frida.re/).
+- Thanks to [Github Coplilot](https://github.com/features/copilot) for code suggestions and improvements.
+
+## Stargazers over time
+
+[![Stargazers over time](https://starchart.cc/adityatelange/frida-ui.svg?background=%23ffffff00&axis=%23858585&line=%236b63ff)](https://starchart.cc/adityatelange/frida-ui)
