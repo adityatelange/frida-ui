@@ -1239,9 +1239,9 @@ els.loadCodeshareSequenceBtn.onclick = loadCodeshareSequence;
 els.codeshareUri.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCodeshare(); } });
 
 // Init
+loadDevices();
 renderCodeshareQueue();
 setupMonacoEditor();
-loadDevices();
 
 // Expandable Console Mode
 function setConsoleMode(enabled) {
