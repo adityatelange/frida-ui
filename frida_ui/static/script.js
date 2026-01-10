@@ -14,14 +14,6 @@ const SELECTED_APP_KEY = 'frida-ui-selected-app';
 const SELECTED_DEVICE_KEY = 'frida-ui-selected-device';
 const APP_LIST_SCROLL_KEY = 'frida-ui-app-list-scroll';
 
-// Restore codeshare queue from localStorage
-try {
-    const saved = localStorage.getItem(QUEUE_KEY);
-    if (saved) codeshareQueue = JSON.parse(saved);
-} catch (e) {
-    console.warn('Failed to restore codeshare queue', e);
-}
-
 // DOM Elements
 const els = {
     devices: document.getElementById('devices'),
@@ -164,8 +156,6 @@ async function addRemoteDevice() {
         updateDisconnectButton();
     }
 }
-
-// --- Logic ---
 
 async function loadDevices() {
     setLoading(els.refreshDevices, true, null);
@@ -877,6 +867,13 @@ function downloadScript() {
 
 // --- CodeShare Queue Logic ---
 function renderCodeshareQueue() {
+
+    // Restore codeshare queue from localStorage
+    try {
+        const saved = localStorage.getItem(QUEUE_KEY);
+        if (saved) codeshareQueue = JSON.parse(saved);
+    } catch (e) { /* ignore */ }
+
     const list = els.codeshareList;
     list.innerHTML = '';
 
