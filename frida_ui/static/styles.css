@@ -596,6 +596,14 @@ textarea#scriptArea:focus+.editor-hint {
     min-height: 18px;
 }
 
+/* Align header actions to the right */
+.editor-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    margin-bottom: 2px;
+}
+
 .panel-title {
     font-size: 12px;
     font-weight: 600;

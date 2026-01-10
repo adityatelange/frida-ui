@@ -46,6 +46,7 @@ const els = {
     loadFileInput: document.getElementById('loadFileInput'),
     loadedFilename: document.getElementById('loadedFilename'),
     sendScript: document.getElementById('sendScript'),
+    downloadScriptBtn: document.getElementById('downloadScriptBtn'),
     consoleOutput: document.getElementById('consoleOutput'),
     clearConsoleBtn: document.getElementById('clearConsoleBtn'),
     downloadConsoleBtn: document.getElementById('downloadConsoleBtn'),
@@ -851,6 +852,25 @@ function downloadConsole() {
     a.remove();
     URL.revokeObjectURL(url);
 }
+
+// Download current editor script as a .js file
+function downloadScript() {
+    // Prefer Monaco editor content if available
+    const code = (typeof monacoEditor !== 'undefined' && monacoEditor) ? monacoEditor.getValue() : (els.scriptArea && els.scriptArea.value ? els.scriptArea.value : '');
+    const safeName = (selectedApp && selectedApp.identifier) ? selectedApp.identifier.replace(/[^\w.-]/g, '_') : 'noapp';
+    const ts = new Date().toISOString().replace(/[:]/g, '-').split('.')[0];
+
+    const blob = new Blob([code], { type: 'application/javascript;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeName}-${ts}.js`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
 // --- CodeShare Queue Logic ---
 function renderCodeshareQueue() {
     const list = els.codeshareList;
@@ -1072,6 +1092,8 @@ if (els.clearConsoleBtn) els.clearConsoleBtn.onclick = () => {
 };
 // Download console
 if (els.downloadConsoleBtn) els.downloadConsoleBtn.onclick = downloadConsole;
+// Download script
+if (els.downloadScriptBtn) els.downloadScriptBtn.onclick = downloadScript;
 
 // Global Shortcuts
 document.addEventListener('keydown', (e) => {
