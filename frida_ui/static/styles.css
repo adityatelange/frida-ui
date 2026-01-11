@@ -160,7 +160,6 @@ button.danger:hover {
     background: var(--danger-hover);
 }
 
-/* Main Layout */
 .container {
     display: flex;
     flex: 1;
@@ -260,8 +259,7 @@ button.danger:hover {
     border: 0;
 }
 
-/* Main Content */
-.main {
+.workspace {
     flex: 1;
     display: flex;
     flex-direction: column;
