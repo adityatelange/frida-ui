@@ -409,23 +409,28 @@ textarea#scriptArea:focus+.editor-hint,
     box-sizing: border-box;
 }
 
+.console-header,
+.console-title,
+.console-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .console-header {
     padding: 5px 10px;
     background: var(--panel-bg);
     font-size: 12px;
     font-weight: 600;
     border-bottom: 1px solid var(--border-color);
-    display: flex;
     justify-content: space-between;
-    align-items: center;
 }
 
 .console-output {
-    flex: 1;
-    overflow-y: auto;
+    flex: 1 1 auto;
+    overflow: auto;
     padding: 10px;
-    font-family: 'Consolas', monospace;
-    font-size: 13px;
+    font: 13px/1 ui-monospace, monospace;
     white-space: pre-wrap;
 }
 
@@ -619,7 +624,7 @@ textarea#scriptArea:focus+.editor-hint,
 .editor-actions {
     margin-left: auto;
     display: flex;
-    gap: 8px;
+    gap: 6px;
     margin-bottom: 2px;
 }
 
