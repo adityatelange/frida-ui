@@ -51,12 +51,18 @@
 
 body {
     margin: 0;
-    font-family: monospace;
+    font-family: system-ui;
     background: var(--bg-color);
     color: var(--text-color);
     height: 100vh;
     display: flex;
     flex-direction: column;
+}
+
+input,
+select,
+button {
+    font-family: system-ui;
 }
 
 /* Scrollbar Styling */
@@ -337,7 +343,6 @@ textarea#scriptArea {
     border: 1px solid var(--border-color);
     border-radius: 3px;
     padding: 10px;
-    font-family: 'Consolas', monospace;
     resize: none;
     overflow: auto;
     min-height: 50px;
@@ -370,8 +375,7 @@ textarea#scriptArea.dragover {
     left: 50%;
     transform: translate(-50%, -50%);
     color: var(--text-hint);
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    font-size: 22px;
+    font-size: 20px;
     pointer-events: none;
     text-align: center;
     width: 100%;
