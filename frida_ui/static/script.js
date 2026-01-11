@@ -1,11 +1,12 @@
 // This code is part of Frida-UI (https://github.com/adityatelange/frida-ui)
 
-// State - Per-App tracking
+// --- Global State ---
 let appSessions = {}; // { appIdentifier: { sessionId, scriptIds, consoleLog, pollInterval } }
-let allApps = [];
-let selectedApp = null;
-let codeshareQueue = [];
+let allApps = []; // List of all apps for the selected device
+let selectedApp = null; // Currently selected app
+let codeshareQueue = []; // Queue of codeshare URIs to load with next script run
 let deviceCache = {}; // Cache for device info including parameters
+let monacoEditor = null; // Monaco editor instance
 
 // LocalStorage Keys
 const QUEUE_KEY = 'frida-ui-codeshare-queue';
@@ -91,6 +92,13 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     return r.json();
 }
 
+// Escape HTML special characters
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // --- Remote Device Functions ---
 function getCurrentAppSession() {
     if (!selectedApp) return null;
@@ -110,6 +118,9 @@ function ensureAppSession() {
     return appSessions[selectedApp.identifier];
 }
 
+/* START Remote Device Management */
+
+// Toggle remote form visibility
 function toggleRemoteForm() {
     const form = els.remoteForm;
     const isVisible = form.classList.contains('show');
@@ -121,12 +132,14 @@ function toggleRemoteForm() {
     }
 }
 
+// Close and reset remote form
 function closeRemoteForm() {
     els.remoteForm.classList.remove('show');
     els.remoteHost.value = '';
     els.remotePort.value = '27042';
 }
 
+// Add a new remote device
 async function addRemoteDevice() {
     const host = els.remoteHost.value.trim();
     const port = parseInt(els.remotePort.value) || 27042;
@@ -156,6 +169,46 @@ async function addRemoteDevice() {
         updateDisconnectButton();
     }
 }
+
+// Check if selected device is remote and show/hide disconnect button
+function updateDisconnectButton() {
+    const selectedOption = els.devices.options[els.devices.selectedIndex];
+    const disconnectBtn = els.disconnectRemoteBtn;
+    if (selectedOption && selectedOption.dataset.isRemote === 'true') {
+        disconnectBtn.classList.remove('hidden');
+    } else {
+        disconnectBtn.classList.add('hidden');
+    }
+}
+
+// Disconnect from selected remote device
+async function disconnectRemoteDevice() {
+    const deviceId = els.devices.value;
+    if (!deviceId) return;
+    const btn = els.disconnectRemoteBtn;
+
+    const selectedOption = els.devices.options[els.devices.selectedIndex];
+    if (selectedOption.dataset.isRemote !== 'true') {
+        alert('Selected device is not a remote device');
+        return;
+    }
+
+    if (!confirm('Disconnect from this remote device?')) return;
+
+    setLoading(btn, true, 'Disconnecting...');
+    try {
+        await apiCall(API.REMOTE_DEVICE(deviceId), 'DELETE');
+        logConsole('System', 'Disconnected from remote device');
+        await loadDevices();
+    } catch (e) {
+        console.error(e);
+        alert('Failed to disconnect: ' + e.message);
+    } finally {
+        setLoading(btn, false);
+    }
+}
+
+/* END Remote Device Management */
 
 async function loadDevices() {
     setLoading(els.refreshDevices, true, null);
@@ -284,11 +337,6 @@ function renderApps() {
     els.appList.scrollTop = savedScroll;
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
 
 function selectApp(app, persist = true) {
     // Stop polling for previous app if any
@@ -331,27 +379,28 @@ function deselectApp() {
     }
 }
 
-function _renderIcon(rawByteString) {
-    const arr = JSON.parse(rawByteString);
-    const bytes = new Uint8ClampedArray(arr);
+async function updateDeviceInfo(devId) {
+    // Render icon from raw byte string
+    function _renderIcon(rawByteString) {
+        const arr = JSON.parse(rawByteString);
+        const bytes = new Uint8ClampedArray(arr);
 
-    if (bytes.length !== 16 * 16 * 4) {
-        return null; // Invalid icon size
+        if (bytes.length !== 16 * 16 * 4) {
+            return null; // Invalid icon size
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 16;
+        canvas.height = 16;
+        const ctx = canvas.getContext('2d');
+        const imageData = new ImageData(bytes, 16, 16);
+        ctx.putImageData(imageData, 0, 0);
+        const dataUrl = canvas.toDataURL("image/png");
+        canvas.remove(); // Clean up
+
+        return dataUrl;
     }
 
-    const canvas = document.createElement('canvas');
-    canvas.width = 16;
-    canvas.height = 16;
-    const ctx = canvas.getContext('2d');
-    const imageData = new ImageData(bytes, 16, 16);
-    ctx.putImageData(imageData, 0, 0);
-    const dataUrl = canvas.toDataURL("image/png");
-    canvas.remove(); // Clean up
-
-    return dataUrl;
-}
-
-async function updateDeviceInfo(devId) {
     const infoPanel = els.deviceInfo;
     if (!infoPanel) return;
 
@@ -426,7 +475,12 @@ function continueSelectApp(app, persist) {
     selectedApp = app;
     if (persist) {
         try {
-            localStorage.setItem(SELECTED_APP_KEY, JSON.stringify({ device: els.devices.value, identifier: app.identifier }));
+            localStorage.setItem(SELECTED_APP_KEY, JSON.stringify(
+                {
+                    device: els.devices.value,
+                    identifier: app.identifier
+                }
+            ));
             localStorage.setItem(SELECTED_DEVICE_KEY, els.devices.value);
         } catch (e) { }
     }
@@ -466,6 +520,19 @@ function restoreConsoleForApp() {
     }
 }
 
+// Start a new session for the selected app
+function startSession(sid, name, pid) {
+    const appSession = ensureAppSession();
+    appSession.sessionId = sid;
+    appSession.scriptIds = [];
+
+    els.sessionPid.textContent = `PID: ${pid}`;
+    updateSessionUI();
+    // Start background polling to watch for messages and session liveness
+    pollMessages();
+}
+
+// Update session-related UI buttons based on current state
 function updateSessionUI() {
     const appSession = getCurrentAppSession();
     const hasSession = appSession && appSession.sessionId;
@@ -492,6 +559,7 @@ function updateSessionUI() {
     }
 }
 
+// Set loading state on a button
 function setLoading(btn, isLoading, loadingText) {
     if (!btn) return;
     if (isLoading) {
@@ -517,6 +585,8 @@ function setLoading(btn, isLoading, loadingText) {
         btn.classList.remove('spinner-only');
     }
 }
+
+/* START Buton Action Handlers */
 
 async function doAttach() {
     if (!selectedApp) return;
@@ -630,17 +700,6 @@ async function doSpawnAndRun() {
     }
 }
 
-function startSession(sid, name, pid) {
-    const appSession = ensureAppSession();
-    appSession.sessionId = sid;
-    appSession.scriptIds = [];
-
-    els.sessionPid.textContent = `PID: ${pid}`;
-    updateSessionUI();
-    // Start background polling to watch for messages and session liveness
-    pollMessages();
-}
-
 async function detach() {
     const appSession = getCurrentAppSession();
     if (!appSession || !appSession.sessionId) return;
@@ -723,6 +782,9 @@ async function runScript() {
         setLoading(btn, false);
     }
 }
+
+/* END Buton Action Handlers */
+
 
 async function pollMessages() {
     const appSession = getCurrentAppSession();
@@ -865,7 +927,8 @@ function downloadScript() {
     URL.revokeObjectURL(url);
 }
 
-// --- CodeShare Queue Logic ---
+/* START CodeShare Queue Logic */
+
 function renderCodeshareQueue() {
 
     // Restore codeshare queue from localStorage
@@ -1006,61 +1069,226 @@ async function loadCodeshareSequence() {
     }
 }
 
+/* END CodeShare Queue Logic */
+
+// Monaco Editor integration
+function loadMonaco() {
+    return new Promise((resolve, reject) => {
+        if (window.require && window.monaco) return resolve();
+        const loader = document.createElement('script');
+        loader.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.40.0/min/vs/loader.min.js';
+        loader.onload = () => {
+            // Configure AMD loader to use CDN path
+            require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.40.0/min/vs' } });
+            require(['vs/editor/editor.main'], () => resolve(), reject);
+        };
+        loader.onerror = reject;
+        document.head.appendChild(loader);
+    });
+}
+
+function setupMonacoEditor() {
+    if (!els.scriptEditor) return;
+    loadMonaco().then(() => {
+        monacoEditor = monaco.editor.create(els.scriptEditor, {
+            value: els.scriptArea.value || '',
+            language: 'javascript',
+            automaticLayout: true,
+            minimap: { enabled: false },
+            fontSize: 13,
+            theme: 'vs-dark',
+            scrollBeyondLastLine: false,
+        });
+        // Sync Monaco -> textarea
+        monacoEditor.getModel().onDidChangeContent(() => {
+            const text = monacoEditor.getValue();
+            const ta = els.scriptArea;
+            if (ta) ta.value = text;
+            updateEditorHint();
+        });
+        // Show the Monaco editor and hide the fallback textarea
+        const ta = els.scriptArea;
+        try {
+            els.scriptEditor.classList.remove('hidden');
+            if (ta) ta.classList.add('hidden');
+        } catch (err) { /* ignore */ }
+
+        updateEditorHint();
+    }).catch(e => {
+        console.warn('Failed to load Monaco editor', e);
+        // Ensure fallback textarea is visible
+        const ta = els.scriptArea;
+        try {
+            if (ta) ta.classList.remove('hidden');
+            els.scriptEditor.classList.add('hidden');
+        } catch (err) { /* ignore */ }
+        try { logConsole('System', 'Monaco editor failed to load; falling back to plain textarea'); } catch (err) { /* log might not be ready */ }
+    });
+}
+
+// Expandable Console Mode
+function setConsoleMode(enabled) {
+    const consoleEl = document.getElementById('consoleContainer');
+    const btn = els.toggleConsoleBtn;
+
+    if (enabled) {
+        consoleEl.dataset.savedHeight = consoleEl.style.height || '';
+        consoleEl.dataset.savedFlex = consoleEl.style.flex || '';
+        consoleEl.style.height = '';
+        consoleEl.style.flex = '1 1 100%';
+    } else {
+        if ('savedHeight' in consoleEl.dataset) {
+            consoleEl.style.height = consoleEl.dataset.savedHeight;
+            delete consoleEl.dataset.savedHeight;
+        }
+        if ('savedFlex' in consoleEl.dataset) {
+            consoleEl.style.flex = consoleEl.dataset.savedFlex;
+            delete consoleEl.dataset.savedFlex;
+        }
+    }
+
+    document.body.classList.toggle('console-only', enabled);
+    btn.setAttribute('aria-pressed', String(enabled));
+    btn.textContent = enabled ? '🗗' : '🗖';
+    btn.title = enabled ? 'Exit Expanded Console' : 'Expand Console';
+    btn.setAttribute('aria-label', enabled ? 'Exit Expanded Console' : 'Expand Console');
+}
+
+function toggleConsoleMode() {
+    const enabled = !document.body.classList.contains('console-only');
+    setConsoleMode(enabled);
+}
+
+// Expandable Editor Mode
+function setEditorMode(enabled) {
+    const editorEl = document.getElementById('editorContainer');
+    const btn = els.toggleEditorBtn;
+
+    if (enabled) {
+        editorEl.dataset.savedHeight = editorEl.style.height || '';
+        editorEl.dataset.savedFlex = editorEl.style.flex || '';
+        editorEl.style.height = '';
+        editorEl.style.flex = '1 1 100%';
+    } else {
+        if ('savedHeight' in editorEl.dataset) {
+            editorEl.style.height = editorEl.dataset.savedHeight;
+            delete editorEl.dataset.savedHeight;
+        }
+        if ('savedFlex' in editorEl.dataset) {
+            editorEl.style.flex = editorEl.dataset.savedFlex;
+            delete editorEl.dataset.savedFlex;
+        }
+    }
+
+    document.body.classList.toggle('editor-only', enabled);
+    btn.setAttribute('aria-pressed', String(enabled));
+    btn.textContent = enabled ? '🗗' : '🗖';
+    btn.title = enabled ? 'Exit Expanded Editor' : 'Expand Editor';
+    btn.setAttribute('aria-label', enabled ? 'Exit Expanded Editor' : 'Expand Editor');
+}
+
+function toggleEditorMode() {
+    const enabled = !document.body.classList.contains('editor-only');
+    setEditorMode(enabled);
+}
+
+// --- Resizing Logic ---
+function setupResizer(resizerId, targetId, direction, property, invert = false, minSize = 50, maxSize = null) {
+    const resizer = document.getElementById(resizerId);
+    const target = document.getElementById(targetId);
+    if (!resizer || !target) return;
+
+    let startPos, startSize;
+
+    resizer.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        resizer.classList.add('resizing');
+        startPos = direction === 'v' ? e.clientY : e.clientX;
+
+        if (property === 'flex-basis') {
+            const flexStyle = window.getComputedStyle(target).flexBasis;
+            startSize = parseInt(flexStyle) || target.offsetHeight;
+        } else {
+            startSize = direction === 'v' ? target.offsetHeight : target.offsetWidth;
+        }
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    });
+
+    function onMouseMove(e) {
+        const currentPos = direction === 'v' ? e.clientY : e.clientX;
+        const delta = currentPos - startPos;
+        let newSize = invert ? startSize - delta : startSize + delta;
+
+        if (newSize < minSize) newSize = minSize;
+        if (maxSize && newSize > maxSize) newSize = maxSize;
+
+        if (property === 'flex-basis') {
+            target.style.flex = `0 0 ${newSize}px`;
+        } else {
+            target.style[property] = `${newSize}px`;
+            if (targetId === 'editorContainer' || targetId === 'consoleContainer') target.style.flex = 'none';
+        }
+    }
+
+    function onMouseUp() {
+        resizer.classList.remove('resizing');
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        localStorage.setItem(`size-${targetId}`, target.style[property] || target.style.flex);
+    }
+
+    const savedSize = localStorage.getItem(`size-${targetId}`);
+    if (savedSize) {
+        if (property === 'flex-basis') target.style.flex = savedSize;
+        else {
+            target.style[property] = savedSize;
+            if (targetId === 'editorContainer' || targetId === 'consoleContainer') target.style.flex = 'none';
+        }
+    }
+}
+
 
 // Restore search string from localStorage
 if (localStorage.getItem(SEARCH_KEY)) {
     els.appSearch.value = localStorage.getItem(SEARCH_KEY);
 }
+
+// Setup resizers
+setupResizer('sidebarResizer', 'sidebar', 'h', 'width', false, 200, 600);
+setupResizer('editorResizer', 'editorContainer', 'v', 'height', false, 100, 800);
+setupResizer('consoleResizer', 'consoleContainer', 'v', 'height', true, 50, 600);
+
+/* START Event Listeners Setup */
+
+// Global Shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const remoteForm = els.remoteForm;
+        if (remoteForm && remoteForm.classList.contains('show')) {
+            closeRemoteForm();
+        } else if (document.body.classList.contains('editor-only')) {
+            setEditorMode(false);
+        } else if (document.body.classList.contains('console-only')) {
+            setConsoleMode(false);
+        } else if (selectedApp) {
+            deselectApp();
+        }
+    }
+});
+// App search input
 els.appSearch.oninput = function () {
     localStorage.setItem(SEARCH_KEY, els.appSearch.value);
     // Reset scroll when filtering
     localStorage.setItem(APP_LIST_SCROLL_KEY, '0');
     renderApps();
 }
-
 // Save scroll position to localStorage
 els.appList.addEventListener('scroll', function () {
     localStorage.setItem(APP_LIST_SCROLL_KEY, els.appList.scrollTop);
 });
-
-// Check if selected device is remote and show/hide disconnect button
-function updateDisconnectButton() {
-    const selectedOption = els.devices.options[els.devices.selectedIndex];
-    const disconnectBtn = els.disconnectRemoteBtn;
-    if (selectedOption && selectedOption.dataset.isRemote === 'true') {
-        disconnectBtn.classList.remove('hidden');
-    } else {
-        disconnectBtn.classList.add('hidden');
-    }
-}
-
-async function disconnectRemoteDevice() {
-    const deviceId = els.devices.value;
-    if (!deviceId) return;
-    const btn = els.disconnectRemoteBtn;
-
-    const selectedOption = els.devices.options[els.devices.selectedIndex];
-    if (selectedOption.dataset.isRemote !== 'true') {
-        alert('Selected device is not a remote device');
-        return;
-    }
-
-    if (!confirm('Disconnect from this remote device?')) return;
-
-    setLoading(btn, true, 'Disconnecting...');
-    try {
-        await apiCall(API.REMOTE_DEVICE(deviceId), 'DELETE');
-        logConsole('System', 'Disconnected from remote device');
-        await loadDevices();
-    } catch (e) {
-        console.error(e);
-        alert('Failed to disconnect: ' + e.message);
-    } finally {
-        setLoading(btn, false);
-    }
-}
-
-// --- Event Listeners ---
+// Refresh devices button
 els.refreshDevices.onclick = loadDevices;
 els.devices.onchange = () => {
     localStorage.setItem(SELECTED_DEVICE_KEY, els.devices.value);
@@ -1095,23 +1323,6 @@ if (els.clearConsoleBtn) els.clearConsoleBtn.onclick = () => {
 if (els.downloadConsoleBtn) els.downloadConsoleBtn.onclick = downloadConsole;
 // Download script
 if (els.downloadScriptBtn) els.downloadScriptBtn.onclick = downloadScript;
-
-// Global Shortcuts
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        const remoteForm = els.remoteForm;
-        if (remoteForm && remoteForm.classList.contains('show')) {
-            closeRemoteForm();
-        } else if (document.body.classList.contains('editor-only')) {
-            setEditorMode(false);
-        } else if (document.body.classList.contains('console-only')) {
-            setConsoleMode(false);
-        } else if (selectedApp) {
-            deselectApp();
-        }
-    }
-});
-
 // Load file into editor
 if (els.loadFileBtn && els.loadFileInput) {
     els.loadFileBtn.onclick = () => els.loadFileInput.click();
@@ -1175,203 +1386,19 @@ if (els.loadFileBtn && els.loadFileInput) {
     // initialize hint state
     updateEditorHint();
 }
-
-
-// Monaco Editor integration
-let monacoEditor = null;
-function loadMonaco() {
-    return new Promise((resolve, reject) => {
-        if (window.require && window.monaco) return resolve();
-        const loader = document.createElement('script');
-        loader.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.40.0/min/vs/loader.min.js';
-        loader.onload = () => {
-            // Configure AMD loader to use CDN path
-            require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.40.0/min/vs' } });
-            require(['vs/editor/editor.main'], () => resolve(), reject);
-        };
-        loader.onerror = reject;
-        document.head.appendChild(loader);
-    });
-}
-
-function setupMonacoEditor() {
-    if (!els.scriptEditor) return;
-    loadMonaco().then(() => {
-        monacoEditor = monaco.editor.create(els.scriptEditor, {
-            value: els.scriptArea.value || '',
-            language: 'javascript',
-            automaticLayout: true,
-            minimap: { enabled: false },
-            fontSize: 13,
-            theme: 'vs-dark',
-            scrollBeyondLastLine: false,
-        });
-        // Sync Monaco -> textarea
-        monacoEditor.getModel().onDidChangeContent(() => {
-            const text = monacoEditor.getValue();
-            const ta = els.scriptArea;
-            if (ta) ta.value = text;
-            updateEditorHint();
-        });
-        // Show the Monaco editor and hide the fallback textarea
-        const ta = els.scriptArea;
-        try {
-            els.scriptEditor.classList.remove('hidden');
-            if (ta) ta.classList.add('hidden');
-        } catch (err) { /* ignore */ }
-
-        updateEditorHint();
-    }).catch(e => {
-        console.warn('Failed to load Monaco editor', e);
-        // Ensure fallback textarea is visible
-        const ta = els.scriptArea;
-        try {
-            if (ta) ta.classList.remove('hidden');
-            els.scriptEditor.classList.add('hidden');
-        } catch (err) { /* ignore */ }
-        try { logConsole('System', 'Monaco editor failed to load; falling back to plain textarea'); } catch (err) { /* log might not be ready */ }
-    });
-}
-
 // CodeShare listeners
 els.addCodeshareBtn.onclick = addCodeshare;
 els.loadCodeshareSequenceBtn.onclick = loadCodeshareSequence;
 els.codeshareUri.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCodeshare(); } });
+// Bind console toggle
+els.toggleConsoleBtn.addEventListener('click', toggleConsoleMode);
+// Bind editor toggle
+els.toggleEditorBtn.addEventListener('click', toggleEditorMode);
+
+/* END Event Listeners Setup */
+
 
 // Init
 loadDevices();
 renderCodeshareQueue();
 setupMonacoEditor();
-
-// Expandable Console Mode
-function setConsoleMode(enabled) {
-    const consoleEl = document.getElementById('consoleContainer');
-    const btn = els.toggleConsoleBtn;
-
-    if (enabled) {
-        consoleEl.dataset.savedHeight = consoleEl.style.height || '';
-        consoleEl.dataset.savedFlex = consoleEl.style.flex || '';
-        consoleEl.style.height = '';
-        consoleEl.style.flex = '1 1 100%';
-    } else {
-        if ('savedHeight' in consoleEl.dataset) {
-            consoleEl.style.height = consoleEl.dataset.savedHeight;
-            delete consoleEl.dataset.savedHeight;
-        }
-        if ('savedFlex' in consoleEl.dataset) {
-            consoleEl.style.flex = consoleEl.dataset.savedFlex;
-            delete consoleEl.dataset.savedFlex;
-        }
-    }
-
-    document.body.classList.toggle('console-only', enabled);
-    btn.setAttribute('aria-pressed', String(enabled));
-    btn.textContent = enabled ? '🗗' : '🗖';
-    btn.title = enabled ? 'Exit Expanded Console' : 'Expand Console';
-    btn.setAttribute('aria-label', enabled ? 'Exit Expanded Console' : 'Expand Console');
-}
-
-function toggleConsoleMode() {
-    const enabled = !document.body.classList.contains('console-only');
-    setConsoleMode(enabled);
-}
-
-// Bind console toggle
-els.toggleConsoleBtn.addEventListener('click', toggleConsoleMode);
-
-// Expandable Editor Mode
-function setEditorMode(enabled) {
-    const editorEl = document.getElementById('editorContainer');
-    const btn = els.toggleEditorBtn;
-
-    if (enabled) {
-        editorEl.dataset.savedHeight = editorEl.style.height || '';
-        editorEl.dataset.savedFlex = editorEl.style.flex || '';
-        editorEl.style.height = '';
-        editorEl.style.flex = '1 1 100%';
-    } else {
-        if ('savedHeight' in editorEl.dataset) {
-            editorEl.style.height = editorEl.dataset.savedHeight;
-            delete editorEl.dataset.savedHeight;
-        }
-        if ('savedFlex' in editorEl.dataset) {
-            editorEl.style.flex = editorEl.dataset.savedFlex;
-            delete editorEl.dataset.savedFlex;
-        }
-    }
-
-    document.body.classList.toggle('editor-only', enabled);
-    btn.setAttribute('aria-pressed', String(enabled));
-    btn.textContent = enabled ? '🗗' : '🗖';
-    btn.title = enabled ? 'Exit Expanded Editor' : 'Expand Editor';
-    btn.setAttribute('aria-label', enabled ? 'Exit Expanded Editor' : 'Expand Editor');
-}
-
-function toggleEditorMode() {
-    const enabled = !document.body.classList.contains('editor-only');
-    setEditorMode(enabled);
-}
-
-// Bind editor toggle
-els.toggleEditorBtn.addEventListener('click', toggleEditorMode);
-
-// --- Resizing Logic ---
-function setupResizer(resizerId, targetId, direction, property, invert = false, minSize = 50, maxSize = null) {
-    const resizer = document.getElementById(resizerId);
-    const target = document.getElementById(targetId);
-    if (!resizer || !target) return;
-
-    let startPos, startSize;
-
-    resizer.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        resizer.classList.add('resizing');
-        startPos = direction === 'v' ? e.clientY : e.clientX;
-
-        if (property === 'flex-basis') {
-            const flexStyle = window.getComputedStyle(target).flexBasis;
-            startSize = parseInt(flexStyle) || target.offsetHeight;
-        } else {
-            startSize = direction === 'v' ? target.offsetHeight : target.offsetWidth;
-        }
-
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-    });
-
-    function onMouseMove(e) {
-        const currentPos = direction === 'v' ? e.clientY : e.clientX;
-        const delta = currentPos - startPos;
-        let newSize = invert ? startSize - delta : startSize + delta;
-
-        if (newSize < minSize) newSize = minSize;
-        if (maxSize && newSize > maxSize) newSize = maxSize;
-
-        if (property === 'flex-basis') {
-            target.style.flex = `0 0 ${newSize}px`;
-        } else {
-            target.style[property] = `${newSize}px`;
-            if (targetId === 'editorContainer' || targetId === 'consoleContainer') target.style.flex = 'none';
-        }
-    }
-
-    function onMouseUp() {
-        resizer.classList.remove('resizing');
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        localStorage.setItem(`size-${targetId}`, target.style[property] || target.style.flex);
-    }
-
-    const savedSize = localStorage.getItem(`size-${targetId}`);
-    if (savedSize) {
-        if (property === 'flex-basis') target.style.flex = savedSize;
-        else {
-            target.style[property] = savedSize;
-            if (targetId === 'editorContainer' || targetId === 'consoleContainer') target.style.flex = 'none';
-        }
-    }
-}
-
-setupResizer('sidebarResizer', 'sidebar', 'h', 'width', false, 200, 600);
-setupResizer('editorResizer', 'editorContainer', 'v', 'height', false, 100, 800);
-setupResizer('consoleResizer', 'consoleContainer', 'v', 'height', true, 50, 600);
