@@ -1,5 +1,10 @@
 # Frida UI
 
+[![PyPI version](https://img.shields.io/pypi/v/frida-ui)](https://pypi.org/project/frida-ui/)
+![Python](https://img.shields.io/badge/python-3.7+-blue.svg)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/frida-ui?label=pypi%20downloads&color=blue)
+![License](https://img.shields.io/github/license/adityatelange/frida-ui)
+
 A modern, lightweight, web-based user interface for [Frida](https://frida.re/), designed for **Android application penetration testing**. It allows you to interact with devices, processes, and scripts directly from your browser.
 
 ![](https://raw.githubusercontent.com/adityatelange/frida-ui/refs/heads/main/assets/dashboard.png)
