@@ -80,25 +80,16 @@ You can also customize the Frida version:
 uv tool install frida-ui --with frida==16.7.19
 ```
 
-#### Option 2: Install from Source
-
-1. Clone the repository:
+#### Option 2: Install from Source (Bleeding Edge)
 
 ```bash
-git clone https://github.com/adityatelange/frida-ui.git
-cd frida-ui
-```
-
-2. Install using uv:
-
-```bash
-uv tool install .
+uv tool install git+https://github.com/adityatelange/frida-ui
 ```
 
 You can customize the Frida version:
 
 ```bash
-uv tool install . --with frida==16.7.19
+uv tool install git+https://github.com/adityatelange/frida-ui --with frida==16.7.19
 ```
 
 > [!IMPORTANT]
