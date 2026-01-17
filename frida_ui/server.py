@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from frida_ui.modules.frida_manager import FridaError, FridaManager
+from frida_ui.modules.codeshare import fetch_codeshare_script
 
 app = FastAPI(title="frida-ui")
 # static files live next to this module in "static/"
@@ -120,8 +121,6 @@ def spawn_and_run(req: SpawnAndRunRequest):
         # If Codeshare URIs are provided, fetch them and compose final payload
         final_script = req.script or ""
         if req.codeshare_uris:
-            from .modules.codeshare import fetch_codeshare_script
-
             parts = []
             for uri in req.codeshare_uris:
                 source = fetch_codeshare_script(uri)
@@ -177,10 +176,7 @@ class CodeShareRequest(BaseModel):
 @app.post("/api/codeshare/load")
 def load_codeshare(req: CodeShareRequest):
     """Load a script from codeshare.frida.re and create it for the given session."""
-
     try:
-        from .modules.codeshare import fetch_codeshare_script
-
         source = fetch_codeshare_script(req.uri)
         if not source:
             raise FridaError("Script source not found on codeshare for uri: " + req.uri)
