@@ -47,6 +47,6 @@ def fetch_codeshare_script(uri: str) -> str:
 
         return data.get("source", "")
     except (HTTPError, URLError) as e:
-        raise RuntimeError(f"Failed to fetch from CodeShare: {e}")
+        raise RuntimeError("Failed to fetch from CodeShare: {}".format(e))
     except Exception as e:
-        raise RuntimeError(f"Failed to fetch from CodeShare: {e}")
+        raise RuntimeError("Failed to fetch from CodeShare: {}".format(e))
