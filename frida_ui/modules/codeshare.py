@@ -3,6 +3,7 @@
 import json
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
+from frida_ui import __version__
 
 
 def fetch_codeshare_script(uri: str) -> str:
@@ -37,7 +38,7 @@ def fetch_codeshare_script(uri: str) -> str:
     api_url = f"https://codeshare.frida.re/api/project/{uri}/"
 
     try:
-        req = Request(api_url, headers={"User-Agent": "frida-ui/1.0"})
+        req = Request(api_url, headers={"User-Agent": f"frida-ui/{__version__}"})
         with urlopen(req, timeout=5) as r:
             status = getattr(r, "status", None)
             if status is not None and status != 200:
