@@ -29,7 +29,7 @@ Open your browser and navigate to: `http://localhost:8000`
 
 - **Auto-discovery**: Automatically detects connected USB and local devices.
 - **Remote Devices**: Easily add and manage remote Frida servers (e.g., `192.168.1.x:27042`).
-- **Device Info**: View detailed system parameters (OS, Arch, API Level) for selected devices.
+- **Device Info**: View detailed system parameters (OS, Arch, API Level) and visual type indicators for selected devices.
 
 ### 🚀 Process & App Control
 
@@ -38,7 +38,7 @@ Open your browser and navigate to: `http://localhost:8000`
 - **Session Management**:
   - **Attach**: Connect to running processes.
   - **Spawn**: Launch installed applications.
-  - **Spawn & Run**: Launch an app and immediately inject a script (early instrumentation).
+  - **Spawn & Run**: Launch an app and immediately inject the editor script along with any queued CodeShare scripts (early instrumentation).
   - **Kill/Detach**: Terminate processes or gracefully disconnect.
 
 ### 💻 Scripting & Instrumentation
@@ -48,7 +48,7 @@ Open your browser and navigate to: `http://localhost:8000`
 - **Download script**: Export the current editor content as a `.js` file (`frida-ui_<app id>_<timestamp>.js`) directly from the editor header.
 - **CodeShare Integration**:
   - Import scripts directly from [Frida CodeShare](https://codeshare.frida.re/).
-  - Create a "Queue" of CodeShare scripts to inject sequentially.
+  - **CodeShare Queue**: Queue multiple CodeShare scripts to be loaded and executed automatically during **Spawn & Run** or manually via the "Run CodeShare Scripts" button.
 
 ### 📊 Console & Logging
 
