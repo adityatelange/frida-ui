@@ -206,6 +206,7 @@ Java.perform(() => {
 ## Credits
 
 - Frida Project - [https://frida.re/](https://frida.re/).
+- Monaco Editor - [https://microsoft.github.io/monaco-editor/](https://microsoft.github.io/monaco-editor/).
 - Thanks to [Github Coplilot](https://github.com/features/copilot) for code suggestions and improvements.
 
 ## Stargazers over time
