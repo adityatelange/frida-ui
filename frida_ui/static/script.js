@@ -160,6 +160,8 @@ async function addRemoteDevice() {
         // Select the newly added device
         els.devices.value = result.id;
         localStorage.setItem(SELECTED_DEVICE_KEY, result.id);
+        localStorage.setItem('frida-ui-remote-host', host);
+        localStorage.setItem('frida-ui-remote-port', port);
         await loadApps();
     } catch (e) {
         console.error(e);
@@ -1253,6 +1255,16 @@ function setupResizer(resizerId, targetId, direction, property, invert = false, 
 // Restore search string from localStorage
 if (localStorage.getItem(SEARCH_KEY)) {
     els.appSearch.value = localStorage.getItem(SEARCH_KEY);
+}
+
+// Restore remote connection fields
+const savedHost = localStorage.getItem('frida-ui-remote-host');
+const savedPort = localStorage.getItem('frida-ui-remote-port');
+if (savedHost) {
+    els.remoteHost.value = savedHost;
+}
+if (savedPort) {
+    els.remotePort.value = savedPort;
 }
 
 // Setup resizers
