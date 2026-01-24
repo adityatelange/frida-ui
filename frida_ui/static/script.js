@@ -1044,6 +1044,7 @@ function moveCodeshare(index, direction) {
 }
 
 async function loadCodeshareSequence() {
+    const btn = els.loadCodeshareSequenceBtn;
     const appSession = getCurrentAppSession();
     if (!appSession || !appSession.sessionId) {
         // Try auto-attach if app selected
@@ -1057,17 +1058,22 @@ async function loadCodeshareSequence() {
     }
     if (codeshareQueue.length === 0) return;
 
-    const currentAppSession = getCurrentAppSession();
-    logConsole('System', 'Loading CodeShare sequence...');
-    for (const uri of codeshareQueue) {
-        try {
-            logConsole('System', `Fetching ${uri}...`);
-            const res = await apiCall(API.CODESHARE_LOAD, 'POST', { session_id: currentAppSession.sessionId, uri });
-            currentAppSession.scriptIds.push(res.script_id);
-            logConsole('System', `Loaded ${uri}`);
-        } catch (e) {
-            logConsole('Error', `Failed to load ${uri}: ${e.message}`);
+    setLoading(btn, true, 'Loading...');
+    try {
+        const currentAppSession = getCurrentAppSession();
+        logConsole('System', 'Loading CodeShare sequence...');
+        for (const uri of codeshareQueue) {
+            try {
+                logConsole('System', `Fetching ${uri}...`);
+                const res = await apiCall(API.CODESHARE_LOAD, 'POST', { session_id: currentAppSession.sessionId, uri });
+                currentAppSession.scriptIds.push(res.script_id);
+                logConsole('System', `Loaded ${uri}`);
+            } catch (e) {
+                logConsole('Error', `Failed to load ${uri}: ${e.message}`);
+            }
         }
+    } finally {
+        setLoading(btn, false);
     }
 }
 
