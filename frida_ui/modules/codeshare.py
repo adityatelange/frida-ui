@@ -5,6 +5,9 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 from frida_ui import __version__
 
+# Cache for codeshare scripts {uri: source}
+_codeshare_cache = {}
+
 
 def fetch_codeshare_script(uri: str) -> str:
     """Fetch script source from codeshare.frida.re.
@@ -29,6 +32,10 @@ def fetch_codeshare_script(uri: str) -> str:
     if uri.endswith("/"):
         uri = uri.rstrip("/")
 
+    # Check cache after URI normalization
+    if uri in _codeshare_cache:
+        return _codeshare_cache[uri]
+
     # Ensure we have a valid looking slug (owner/project)
     parts = uri.split("/")
     if len(parts) < 2:
@@ -46,7 +53,11 @@ def fetch_codeshare_script(uri: str) -> str:
             text = r.read().decode("utf-8")
         data = json.loads(text)
 
-        return data.get("source", "")
+        source = data.get("source", "")
+        if source:
+            _codeshare_cache[uri] = source
+
+        return source
     except (HTTPError, URLError) as e:
         raise RuntimeError("Failed to fetch from CodeShare: {}".format(e))
     except Exception as e:
