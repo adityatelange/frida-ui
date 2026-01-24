@@ -71,10 +71,10 @@ button {
 /* Header */
 header {
     background: var(--header-bg);
-    padding: 10px 20px;
+    padding: 10px 15px;
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 10px;
     border-bottom: 1px solid var(--border-color);
     height: 50px;
     box-sizing: border-box;
@@ -269,7 +269,7 @@ button.danger:hover {
 }
 
 .session-header {
-    padding: 10px 20px;
+    padding: 10px 15px;
     background: var(--panel-bg);
     border-bottom: 1px solid var(--border-color);
     display: flex;
@@ -586,7 +586,6 @@ textarea#scriptArea:focus+.editor-hint,
 #sessionIdentifier {
     font-size: 12px;
     color: var(--text-muted);
-    margin-left: 8px;
 }
 
 .editor-header {
