@@ -484,11 +484,11 @@ textarea#scriptArea:focus+.editor-hint,
 }
 
 .remote-form input[type="text"] {
-    width: 140px;
+    width: 110px;
 }
 
 .remote-form input[type="number"] {
-    width: 70px;
+    width: 75px;
 }
 
 .remote-form button {
