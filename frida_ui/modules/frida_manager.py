@@ -98,7 +98,7 @@ class FridaManager:
                     {
                         "id": d.id,
                         "name": d.name,
-                        "icon": json.dumps(list(d.icon["image"])) if d.icon else None,
+                        "icon": list(d.icon["image"]) if d.icon else None,
                         "type": str(d.type),
                         "can_disconnect": d.id in remote_ids,
                         "parameters": params,

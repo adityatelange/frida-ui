@@ -381,9 +381,9 @@ function deselectApp() {
 
 async function updateDeviceInfo(devId) {
     // Render icon from raw byte string
-    function _renderIcon(rawByteString) {
-        const arr = JSON.parse(rawByteString);
-        const bytes = new Uint8ClampedArray(arr);
+    function _renderIcon(iconArray) {
+        if (!iconArray || !Array.isArray(iconArray)) return null;
+        const bytes = new Uint8ClampedArray(iconArray);
 
         if (bytes.length !== 16 * 16 * 4) {
             return null; // Invalid icon size
