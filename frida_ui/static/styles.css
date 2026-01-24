@@ -42,6 +42,9 @@
     /* Misc */
     --text-hint: rgba(255, 255, 255, 0.35);
     --loader-border: rgba(255, 255, 255, 0.3);
+
+    /* color scheme */
+    color-scheme: dark;
 }
 
 body {
