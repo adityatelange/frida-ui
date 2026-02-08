@@ -35,6 +35,7 @@ const els = {
     detachBtn: document.getElementById('detachBtn'),
     spawnRunBtn: document.getElementById('spawnRunBtn'),
     editorContainer: document.getElementById('editorContainer'),
+    consoleContainer: document.getElementById('consoleContainer'),
     toggleEditorBtn: document.getElementById('toggleEditorBtn'),
     scriptArea: document.getElementById('scriptArea'),
     scriptEditor: document.getElementById('scriptEditor'),
@@ -1203,58 +1204,159 @@ function toggleEditorMode() {
 // --- Resizing Logic ---
 function setupResizer(resizerId, targetId, direction, property, invert = false, minSize = 50, maxSize = null) {
     const resizer = document.getElementById(resizerId);
-    const target = document.getElementById(targetId);
-    if (!resizer || !target) return;
+    if (!resizer) return;
 
-    let startPos, startSize;
+    if (direction === 'h') {
+        const target = document.getElementById(targetId);
+        if (!target) return;
+        let startPos, startSize;
+
+        resizer.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            resizer.classList.add('resizing');
+            startPos = e.clientX;
+            startSize = target.offsetWidth;
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        function onMouseMove(e) {
+            const currentPos = e.clientX;
+            const delta = currentPos - startPos;
+            let newSize = invert ? startSize - delta : startSize + delta;
+
+            if (newSize < minSize) newSize = minSize;
+            if (maxSize && newSize > maxSize) newSize = maxSize;
+
+            target.style[property] = `${newSize}px`;
+        }
+
+        function onMouseUp() {
+            resizer.classList.remove('resizing');
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            localStorage.setItem(`size-${targetId}`, target.style[property]);
+        }
+
+        const savedSize = localStorage.getItem(`size-${targetId}`);
+        if (savedSize) {
+            target.style[property] = savedSize;
+        }
+        return;
+    }
+    if (direction === 'v') {
+        // Restore vertical resizer positions
+        const editorFlex = localStorage.getItem('frida-ui-editor-flex');
+        const controlsFlex = localStorage.getItem('frida-ui-controls-flex');
+        const consoleFlex = localStorage.getItem('frida-ui-console-flex');
+        if (editorFlex && controlsFlex && consoleFlex) {
+            document.getElementById('editorContainer').style.flex = editorFlex;
+            document.getElementById('controlsArea').style.flex = controlsFlex;
+            document.getElementById('consoleContainer').style.flex = consoleFlex;
+        }
+    }
+
+    const editorContainer = els.editorContainer;
+    const controlsArea = document.getElementById('controlsArea');
+    const consoleContainer = els.consoleContainer;
+
+    const minSizes = {
+        editor: 100,
+        controls: 120,
+        console: 50
+    };
+
+    let startY = 0;
+    let startEditorHeight = 0;
+    let startControlsHeight = 0;
+    let startConsoleHeight = 0;
+
+    const doDrag = (e) => {
+        const deltaY = e.clientY - startY;
+        resizer.classList.add('resizing');
+
+        if (resizerId === 'editorResizer') {
+            if (deltaY > 0) { // Dragging down
+                const totalHeight = startEditorHeight + startControlsHeight + startConsoleHeight;
+                let newEditorHeight = startEditorHeight + deltaY;
+
+                const controlsShrink = Math.min(deltaY, startControlsHeight - minSizes.controls);
+                let newControlsHeight = startControlsHeight - controlsShrink;
+
+                let newConsoleHeight = startConsoleHeight;
+                const remainingDelta = deltaY - controlsShrink;
+                if (remainingDelta > 0) {
+                    const consoleShrink = Math.min(remainingDelta, startConsoleHeight - minSizes.console);
+                    newConsoleHeight -= consoleShrink;
+                }
+
+                newEditorHeight = totalHeight - newControlsHeight - newConsoleHeight;
+
+                editorContainer.style.flex = `1 1 ${newEditorHeight}px`;
+                controlsArea.style.flex = `0 0 ${newControlsHeight}px`;
+                consoleContainer.style.flex = `0 0 ${newConsoleHeight}px`;
+
+            } else { // Dragging up
+                const newEditorHeight = startEditorHeight + deltaY;
+                if (newEditorHeight >= minSizes.editor) {
+                    const newControlsHeight = startControlsHeight - deltaY;
+                    editorContainer.style.flex = `1 1 ${newEditorHeight}px`;
+                    controlsArea.style.flex = `0 0 ${newControlsHeight}px`;
+                }
+            }
+        } else if (resizerId === 'consoleResizer') {
+            if (deltaY < 0) { // Dragging up
+                const totalHeight = startEditorHeight + startControlsHeight + startConsoleHeight;
+                let newConsoleHeight = startConsoleHeight - deltaY;
+
+                const controlsShrink = Math.min(-deltaY, startControlsHeight - minSizes.controls);
+                let newControlsHeight = startControlsHeight - controlsShrink;
+
+                let newEditorHeight = startEditorHeight;
+                const remainingDelta = -deltaY - controlsShrink;
+                if (remainingDelta > 0) {
+                    const editorShrink = Math.min(remainingDelta, startEditorHeight - minSizes.editor);
+                    newEditorHeight -= editorShrink;
+                }
+
+                newConsoleHeight = totalHeight - newControlsHeight - newEditorHeight;
+
+                editorContainer.style.flex = `1 1 ${newEditorHeight}px`;
+                controlsArea.style.flex = `0 0 ${newControlsHeight}px`;
+                consoleContainer.style.flex = `0 0 ${newConsoleHeight}px`;
+
+            } else { // Dragging down
+                const newConsoleHeight = startConsoleHeight - deltaY;
+                if (newConsoleHeight >= minSizes.console) {
+                    const newControlsHeight = startControlsHeight + deltaY;
+                    consoleContainer.style.flex = `0 0 ${newConsoleHeight}px`;
+                    controlsArea.style.flex = `0 0 ${newControlsHeight}px`;
+                }
+            }
+        }
+    };
+
+    const stopDrag = () => {
+        resizer.classList.remove('resizing');
+        document.documentElement.removeEventListener('mousemove', doDrag, false);
+        document.documentElement.removeEventListener('mouseup', stopDrag, false);
+
+        localStorage.setItem('frida-ui-editor-flex', editorContainer.style.flex);
+        localStorage.setItem('frida-ui-controls-flex', controlsArea.style.flex);
+        localStorage.setItem('frida-ui-console-flex', consoleContainer.style.flex);
+    };
 
     resizer.addEventListener('mousedown', (e) => {
+        startY = e.clientY;
+        startEditorHeight = editorContainer.offsetHeight;
+        startControlsHeight = controlsArea.offsetHeight;
+        startConsoleHeight = consoleContainer.offsetHeight;
+
+        document.documentElement.addEventListener('mousemove', doDrag, false);
+        document.documentElement.addEventListener('mouseup', stopDrag, false);
         e.preventDefault();
-        resizer.classList.add('resizing');
-        startPos = direction === 'v' ? e.clientY : e.clientX;
-
-        if (property === 'flex-basis') {
-            const flexStyle = window.getComputedStyle(target).flexBasis;
-            startSize = parseInt(flexStyle) || target.offsetHeight;
-        } else {
-            startSize = direction === 'v' ? target.offsetHeight : target.offsetWidth;
-        }
-
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-    });
-
-    function onMouseMove(e) {
-        const currentPos = direction === 'v' ? e.clientY : e.clientX;
-        const delta = currentPos - startPos;
-        let newSize = invert ? startSize - delta : startSize + delta;
-
-        if (newSize < minSize) newSize = minSize;
-        if (maxSize && newSize > maxSize) newSize = maxSize;
-
-        if (property === 'flex-basis') {
-            target.style.flex = `0 0 ${newSize}px`;
-        } else {
-            target.style[property] = `${newSize}px`;
-            if (targetId === 'editorContainer' || targetId === 'consoleContainer') target.style.flex = 'none';
-        }
-    }
-
-    function onMouseUp() {
-        resizer.classList.remove('resizing');
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        localStorage.setItem(`size-${targetId}`, target.style[property] || target.style.flex);
-    }
-
-    const savedSize = localStorage.getItem(`size-${targetId}`);
-    if (savedSize) {
-        if (property === 'flex-basis') target.style.flex = savedSize;
-        else {
-            target.style[property] = savedSize;
-            if (targetId === 'editorContainer' || targetId === 'consoleContainer') target.style.flex = 'none';
-        }
-    }
+    }, false);
 }
 
 
@@ -1275,8 +1377,8 @@ if (savedPort) {
 
 // Setup resizers
 setupResizer('sidebarResizer', 'sidebar', 'h', 'width', false, 200, 600);
-setupResizer('editorResizer', 'editorContainer', 'v', 'height', false, 100, 800);
-setupResizer('consoleResizer', 'consoleContainer', 'v', 'height', true, 50, 600);
+setupResizer('editorResizer', 'editorContainer', 'v');
+setupResizer('consoleResizer', 'consoleContainer', 'v');
 
 /* START Event Listeners Setup */
 

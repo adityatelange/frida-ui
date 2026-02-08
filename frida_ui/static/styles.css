@@ -266,6 +266,7 @@ button.danger:hover {
     flex-direction: column;
     height: 100%;
     overflow: hidden;
+    flex: 1;
 }
 
 .session-header {
@@ -296,7 +297,7 @@ button.danger:hover {
 }
 
 .editor-container {
-    flex: 1;
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     padding: 10px;
@@ -384,6 +385,7 @@ textarea#scriptArea:focus+.editor-hint,
     flex-direction: column;
     overflow: hidden;
     box-sizing: border-box;
+    min-height: 50px;
 }
 
 .console-header,
@@ -547,7 +549,7 @@ textarea#scriptArea:focus+.editor-hint,
     flex-shrink: 0;
     z-index: 10;
     position: relative;
-    margin-bottom: -4px;
+    margin-top: -4px;
 }
 
 .resizer-v:hover,
@@ -616,8 +618,8 @@ textarea#scriptArea:focus+.editor-hint,
     border-top: 1px solid var(--border-color);
     padding-top: 10px;
     margin: 0 10px 12px 10px;
-    flex: 1;
-    min-height: 150px;
+    flex: 0 0 120px;
+    min-height: 120px;
 }
 
 /* CodeShare Manager */
