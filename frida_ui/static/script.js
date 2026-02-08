@@ -1375,6 +1375,14 @@ if (savedPort) {
     els.remotePort.value = savedPort;
 }
 
+// Confirm before refreshing if a session is active
+window.addEventListener('beforeunload', (e) => {
+    const hasActiveSession = Object.values(appSessions).some(s => s.sessionId);
+    if (hasActiveSession) {
+        e.preventDefault();
+    }
+});
+
 // Setup resizers
 setupResizer('sidebarResizer', 'sidebar', 'h', 'width', false, 200, 600);
 setupResizer('editorResizer', 'editorContainer', 'v');
