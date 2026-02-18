@@ -1,6 +1,8 @@
 # This code is part of Frida-UI (https://github.com/adityatelange/frida-ui)
 
 import json
+import os
+import tempfile
 import textwrap
 import threading
 import uuid
@@ -387,7 +389,36 @@ class FridaManager:
             """
         ).strip()
         wrapped_source = console_forwarder + "\n" + script_source
-        script = session.create_script(wrapped_source)
+
+        # Frida 17+ requires explicit bridge imports (ObjC, Java, Swift are no
+        # longer globals).  Use frida.Compiler to resolve them so users get the
+        # same experience as the REPL where bridges are available automatically.
+        bridge_imports = "\n".join([
+            'import ObjC from "frida-objc-bridge";',
+            'import Swift from "frida-swift-bridge";',
+            'import Java from "frida-java-bridge";',
+        ])
+        full_source = bridge_imports + "\n" + wrapped_source
+
+        tmp = None
+        project_root = os.getcwd()
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".js", delete=False,
+                dir=project_root,
+            ) as f:
+                f.write(full_source)
+                tmp = f.name
+            compiler = frida.Compiler()
+            bundle = compiler.build(tmp, project_root=project_root)
+            script = session.create_script(bundle)
+        except Exception:
+            # Compilation failed — fall back to plain script (bridges
+            # won't be available; user needs to npm install them).
+            script = session.create_script(wrapped_source)
+        finally:
+            if tmp and os.path.exists(tmp):
+                os.unlink(tmp)
         script_id = str(uuid.uuid4())
         self.message_queues[script_id] = []
 
