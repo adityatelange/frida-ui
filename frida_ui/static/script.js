@@ -232,7 +232,8 @@ async function loadDevices() {
         devs.forEach(d => {
             const opt = document.createElement('option');
             opt.value = d.id;
-            opt.textContent = `${d.name} (${d.type})`;
+            const typeLabel = d.is_simulator ? 'simulator' : d.type;
+            opt.textContent = `${d.name} (${typeLabel})`;
             opt.dataset.isRemote = d.can_disconnect ? 'true' : 'false';
             els.devices.appendChild(opt);
         });
@@ -418,12 +419,14 @@ async function updateDeviceInfo(devId) {
             iconDataUrl = _renderIcon(info.icon);
         }
 
+        const simBadge = info.is_simulator ? '<span class="badge simulator-badge">Simulator</span>' : '';
         let html = `
             <div class="device-info-header">
             <div class="device-info-title">${escapeHtml(info.name)}</div>
             ${iconDataUrl ? `<span class="badge">
                 <img src="${iconDataUrl}" alt="icon" class="device-icon" />
             </span>` : ''}
+            ${simBadge}
             </div>
             <table class="device-info-table">
             <tr>

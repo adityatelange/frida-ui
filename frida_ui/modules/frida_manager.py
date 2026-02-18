@@ -1,12 +1,19 @@
 # This code is part of Frida-UI (https://github.com/adityatelange/frida-ui)
 
 import json
+import re
 import textwrap
 import threading
 import uuid
 from typing import Any, Dict, List
 
 import frida
+
+# CoreSimulator UDIDs are uppercase hex UUIDs
+_SIMULATOR_UDID_RE = re.compile(
+    r"^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$",
+    re.IGNORECASE,
+)
 
 
 class FridaError(RuntimeError):
@@ -94,12 +101,18 @@ class FridaManager:
             params = {}
             try:
                 params = d.query_system_parameters()
+                dtype = str(d.type)
+                is_simulator = (
+                    dtype == "remote"
+                    and bool(_SIMULATOR_UDID_RE.match(d.id))
+                )
                 devices.append(
                     {
                         "id": d.id,
                         "name": d.name,
                         "icon": list(d.icon["image"]) if d.icon else None,
-                        "type": str(d.type),
+                        "type": dtype,
+                        "is_simulator": is_simulator,
                         "can_disconnect": d.id in remote_ids,
                         "parameters": params,
                     }
@@ -110,13 +123,15 @@ class FridaManager:
         def sort_key(d):
             # 1. Active session? (0=Yes, 1=No)
             k1 = 0 if d["id"] in active_ids else 1
-            # 2. Type? (0=Remote, 1=USB, 2=Other)
-            if d["type"] == "remote":
+            # 2. Type? (0=Remote, 1=Simulator, 2=USB, 3=Other)
+            if d["type"] == "remote" and not d.get("is_simulator"):
                 k2 = 0
-            elif d["type"] == "usb":
+            elif d.get("is_simulator"):
                 k2 = 1
-            else:
+            elif d["type"] == "usb":
                 k2 = 2
+            else:
+                k2 = 3
             return (k1, k2)
 
         devices.sort(key=sort_key)
