@@ -1404,6 +1404,34 @@ document.addEventListener('keydown', (e) => {
             deselectApp();
         }
     }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        if (e.shiftKey) {
+            if (!els.spawnBtn.classList.contains('hidden')) {
+                e.preventDefault();
+                els.spawnBtn.click();
+            } else if (!els.loadCodeshareSequenceBtn.classList.contains('hidden')) {
+                e.preventDefault();
+                els.loadCodeshareSequenceBtn.click();
+            }
+        } else {
+            if (!els.spawnRunBtn.classList.contains('hidden')) {
+                e.preventDefault();
+                els.spawnRunBtn.click();
+            } else if (!els.sendScript.classList.contains('hidden')) {
+                e.preventDefault();
+                els.sendScript.click();
+            }
+        }
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Backspace') {
+        if (!els.detachBtn.classList.contains('hidden')) {
+            e.preventDefault();
+            els.detachBtn.click();
+        } else if (!els.killBtn.classList.contains('hidden')) {
+            e.preventDefault();
+            els.killBtn.click();
+        }
+    }
 });
 // App search input
 els.appSearch.oninput = function () {
