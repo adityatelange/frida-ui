@@ -1481,10 +1481,7 @@ if (els.downloadConsoleBtn) els.downloadConsoleBtn.onclick = downloadConsole;
 if (els.downloadScriptBtn) els.downloadScriptBtn.onclick = downloadScript;
 // Load file into editor
 if (els.loadFileBtn && els.loadFileInput) {
-    els.loadFileBtn.onclick = () => els.loadFileInput.click();
-    els.loadFileInput.onchange = async (e) => {
-        const f = e.target.files && e.target.files[0];
-        if (!f) return;
+    async function handleFileLoad(f, sourceLabel = 'file selection') {
         try {
             const text = await f.text();
             els.scriptArea.value = text;
@@ -1493,11 +1490,17 @@ if (els.loadFileBtn && els.loadFileInput) {
                 els.loadedFilename.textContent = f.name;
                 els.loadedFilename.classList.remove('hidden');
             }
-            logConsole('System', `Loaded file: ${f.name}`);
+            logConsole('System', `Loaded script via ${sourceLabel}: ${f.name}`);
             updateEditorHint();
         } catch (err) {
-            logConsole('Error', `Failed to read file: ${err.message}`);
+            logConsole('Error', `Failed to read ${sourceLabel}: ${err.message}`);
         }
+    }
+
+    els.loadFileBtn.onclick = () => els.loadFileInput.click();
+    els.loadFileInput.onchange = (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (f) handleFileLoad(f, 'file selection');
     };
 
     if (els.editorContainer) els.editorContainer.addEventListener('dragenter', (ev) => { ev.preventDefault(); if (els.scriptArea) els.scriptArea.classList.add('dragover'); if (els.scriptEditor) els.scriptEditor.classList.add('dragover'); });
@@ -1508,21 +1511,7 @@ if (els.loadFileBtn && els.loadFileInput) {
         if (els.scriptArea) els.scriptArea.classList.remove('dragover');
         if (els.scriptEditor) els.scriptEditor.classList.remove('dragover');
         const files = ev.dataTransfer && ev.dataTransfer.files;
-        if (!files || files.length === 0) return;
-        const f = files[0];
-        try {
-            const text = await f.text();
-            els.scriptArea.value = text;
-            if (monacoEditor) monacoEditor.setValue(text);
-            if (els.loadedFilename) {
-                els.loadedFilename.textContent = f.name;
-                els.loadedFilename.classList.remove('hidden');
-            }
-            logConsole('System', `Loaded file via drag-and-drop: ${f.name}`);
-            updateEditorHint();
-        } catch (err) {
-            logConsole('Error', `Failed to read dropped file: ${err.message}`);
-        }
+        if (files && files.length > 0) handleFileLoad(files[0], 'drag-and-drop');
     });
 
     // Show hint when editor is empty; hide it on input or dragover
