@@ -137,13 +137,13 @@ function toggleRemoteForm() {
 function closeRemoteForm() {
     els.remoteForm.classList.remove('show');
     els.remoteHost.value = '';
-    els.remotePort.value = '27042';
+    els.remotePort.value = '';
 }
 
 // Add a new remote device
 async function addRemoteDevice() {
     const host = els.remoteHost.value.trim();
-    const port = parseInt(els.remotePort.value) || 27042;
+    const port = parseInt(els.remotePort.value);
     const btn = els.connectRemoteBtn;
 
     if (!host) {
@@ -162,6 +162,9 @@ async function addRemoteDevice() {
         localStorage.setItem(SELECTED_DEVICE_KEY, result.id);
         localStorage.setItem('frida-ui-remote-host', host);
         localStorage.setItem('frida-ui-remote-port', port);
+
+        // Deselect current app when switching to the new remote device
+        deselectApp();
 
         await loadDevices();
     } catch (e) {
@@ -202,7 +205,13 @@ async function disconnectRemoteDevice() {
     try {
         await apiCall(API.REMOTE_DEVICE(deviceId), 'DELETE');
         logConsole('System', 'Disconnected from remote device');
+
+        deselectApp();
         await loadDevices();
+
+        // Refill the form with last used connection details
+        els.remoteHost.value = localStorage.getItem('frida-ui-remote-host') || '';
+        els.remotePort.value = localStorage.getItem('frida-ui-remote-port') || '';
     } catch (e) {
         console.error(e);
         alert('Failed to disconnect: ' + e.message);
