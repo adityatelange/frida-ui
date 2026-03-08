@@ -157,13 +157,13 @@ async function addRemoteDevice() {
         const result = await apiCall(API.REMOTE_DEVICES, 'POST', { host, port });
         logConsole('System', `Connected to remote device: ${result.name}`);
         closeRemoteForm();
-        await loadDevices();
-        // Select the newly added device
-        els.devices.value = result.id;
+
+        // Save the new device ID so loadDevices() restores it
         localStorage.setItem(SELECTED_DEVICE_KEY, result.id);
         localStorage.setItem('frida-ui-remote-host', host);
         localStorage.setItem('frida-ui-remote-port', port);
-        await loadApps();
+
+        await loadDevices();
     } catch (e) {
         console.error(e);
         alert('Failed to add remote device: ' + e.message);
