@@ -242,6 +242,12 @@ button.danger:hover {
     border: 0;
 }
 
+.badge.simulator-badge {
+    background: #5856d6;
+    color: #fff;
+    border: 0;
+}
+
 .workspace {
     flex: 1;
     display: flex;
