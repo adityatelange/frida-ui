@@ -4,7 +4,7 @@
 let appSessions = {}; // { appIdentifier: { sessionId, scriptIds, consoleLog, pollInterval } }
 let allApps = []; // List of all apps for the selected device
 let selectedApp = null; // Currently selected app
-let codeshareQueue = []; // Queue of codeshare URIs to load with next script run
+let codeshareQueue = []; // Queue of codeshare URIs / local:<path> entries to load with next script run
 let deviceCache = {}; // Cache for device info including parameters
 let monacoEditor = null; // Monaco editor instance
 
@@ -14,6 +14,7 @@ const SEARCH_KEY = 'frida-ui-app-search';
 const SELECTED_APP_KEY = 'frida-ui-selected-app';
 const SELECTED_DEVICE_KEY = 'frida-ui-selected-device';
 const APP_LIST_SCROLL_KEY = 'frida-ui-app-list-scroll';
+const LOCAL_PREFIX = 'local:';
 
 // DOM Elements
 const els = {
@@ -57,7 +58,11 @@ const els = {
     toggleRemoteBtn: document.getElementById('toggleRemoteBtn'),
     cancelRemoteBtn: document.getElementById('cancelRemoteBtn'),
     addCodeshareBtn: document.getElementById('addCodeshareBtn'),
-    loadCodeshareSequenceBtn: document.getElementById('loadCodeshareSequenceBtn')
+    loadCodeshareSequenceBtn: document.getElementById('loadCodeshareSequenceBtn'),
+    localScriptRow: document.getElementById('localScriptRow'),
+    localScriptSelect: document.getElementById('localScriptSelect'),
+    refreshLocalScriptsBtn: document.getElementById('refreshLocalScriptsBtn'),
+    addLocalScriptBtn: document.getElementById('addLocalScriptBtn')
 };
 
 // --- API Endpoints ---
@@ -74,7 +79,8 @@ const API = {
     SCRIPT: '/api/script',
     SESSION_ALIVE: (sessionId) => `/api/session/${sessionId}/alive`,
     SCRIPT_MESSAGES: (scriptId) => `/api/scripts/${scriptId}/messages?clear=true`,
-    CODESHARE_LOAD: '/api/codeshare/load'
+    CODESHARE_LOAD: '/api/codeshare/load',
+    LOCAL_SCRIPTS: '/api/local_scripts'
 };
 
 // --- API Helpers ---
@@ -103,20 +109,20 @@ function escapeHtml(text) {
 // --- Remote Device Functions ---
 function getCurrentAppSession() {
     if (!selectedApp) return null;
-    return appSessions[selectedApp.identifier] || null;
+    return appSessions[selectedApp.key] || null;
 }
 
 function ensureAppSession() {
     if (!selectedApp) return null;
-    if (!appSessions[selectedApp.identifier]) {
-        appSessions[selectedApp.identifier] = {
+    if (!appSessions[selectedApp.key]) {
+        appSessions[selectedApp.key] = {
             sessionId: null,
             scriptIds: [],
             consoleLog: [],
             pollInterval: null
         };
     }
-    return appSessions[selectedApp.identifier];
+    return appSessions[selectedApp.key];
 }
 
 /* START Remote Device Management */
@@ -292,7 +298,7 @@ async function loadApps() {
 
         // Update selectedApp state if it exists in the new list
         if (selectedApp) {
-            const updatedApp = allApps.find(a => a.identifier === selectedApp.identifier);
+            const updatedApp = allApps.find(a => a.key === selectedApp.key);
             if (updatedApp) {
                 selectedApp = updatedApp;
                 // Update UI elements that depend on selectedApp
@@ -330,7 +336,8 @@ function renderApps() {
     filtered.forEach(app => {
         const div = document.createElement('div');
         div.className = 'app-item';
-        if (selectedApp && selectedApp.identifier === app.identifier) div.classList.add('active');
+        div.dataset.key = app.key;
+        if (selectedApp && selectedApp.key === app.key) div.classList.add('active');
         div.innerHTML = `
                     <div>
                         <span class="app-name">${escapeHtml(app.name)}</span>
@@ -352,8 +359,8 @@ function renderApps() {
 
 function selectApp(app, persist = true) {
     // Stop polling for previous app if any
-    if (selectedApp && selectedApp.identifier !== app.identifier) {
-        const prevSession = appSessions[selectedApp.identifier];
+    if (selectedApp && selectedApp.key !== app.key) {
+        const prevSession = appSessions[selectedApp.key];
         if (prevSession && prevSession.pollInterval) {
             clearTimeout(prevSession.pollInterval);
             prevSession.pollInterval = null;
@@ -367,7 +374,7 @@ function deselectApp() {
     if (!selectedApp) return;
 
     // Stop polling
-    const appSession = appSessions[selectedApp.identifier];
+    const appSession = appSessions[selectedApp.key];
     if (appSession && appSession.pollInterval) {
         clearTimeout(appSession.pollInterval);
         appSession.pollInterval = null;
@@ -615,7 +622,7 @@ async function doAttach() {
         selectedApp.pid = res.pid;
         // Update app list UI to show running badge
         const appItem = Array.from(els.appList.children).find(el =>
-            el.querySelector('.app-id').textContent === selectedApp.identifier
+            el.dataset.key === selectedApp.key
         );
         if (appItem) {
             const badgeContainer = appItem.children[1];
@@ -629,7 +636,7 @@ async function doAttach() {
         // Clear PID and any session state
         selectedApp.pid = null;
         els.sessionPid.textContent = 'Not Running';
-        const appSession = appSessions[selectedApp.identifier];
+        const appSession = appSessions[selectedApp.key];
         if (appSession) {
             appSession.sessionId = null;
             appSession.scriptIds = [];
@@ -653,14 +660,15 @@ async function doSpawn() {
         const devId = els.devices.value;
         const res = await apiCall(API.SPAWN, 'POST', {
             device_id: devId,
-            identifier: selectedApp.identifier
+            identifier: selectedApp.identifier,
+            android_user: selectedApp.android_user
         });
 
         // Update app state to running
         selectedApp.pid = res.pid;
         // Update app list UI to show running badge
         const appItem = Array.from(els.appList.children).find(el =>
-            el.querySelector('.app-id').textContent === selectedApp.identifier
+            el.dataset.key === selectedApp.key
         );
         if (appItem) {
             const badgeContainer = appItem.children[1];
@@ -686,6 +694,7 @@ async function doSpawnAndRun() {
         const res = await apiCall(API.SPAWN_AND_RUN, 'POST', {
             device_id: devId,
             identifier: selectedApp.identifier,
+            android_user: selectedApp.android_user,
             script: code,
             codeshare_uris: codeshareQueue
         });
@@ -694,7 +703,7 @@ async function doSpawnAndRun() {
         selectedApp.pid = res.pid;
         // Update app list UI to show running badge
         const appItem = Array.from(els.appList.children).find(el =>
-            el.querySelector('.app-id').textContent === selectedApp.identifier
+            el.dataset.key === selectedApp.key
         );
         if (appItem) {
             const badgeContainer = appItem.children[1];
@@ -744,7 +753,7 @@ async function killApp() {
         // Clear PID and any session state
         selectedApp.pid = null;
         els.sessionPid.textContent = 'Not Running';
-        const appSession = appSessions[selectedApp.identifier];
+        const appSession = appSessions[selectedApp.key];
         if (appSession) {
             appSession.sessionId = null;
             appSession.scriptIds = [];
@@ -953,7 +962,7 @@ function renderCodeshareQueue() {
     list.innerHTML = '';
 
     if (codeshareQueue.length === 0) {
-        list.innerHTML = '<div class="status-msg">No scripts in queue. Add a CodeShare URI above.</div>';
+        list.innerHTML = '<div class="status-msg">No scripts in queue. Add a CodeShare URI or local script above.</div>';
         return;
     }
 
@@ -1027,15 +1036,37 @@ function addCodeshare() {
         return;
     }
 
-    if (codeshareQueue.includes(uri)) {
-        input.value = '';
-        return;
-    }
-
-    codeshareQueue.push(uri);
+    enqueueScript(uri);
     input.value = '';
+}
+
+function enqueueScript(uri) {
+    if (codeshareQueue.includes(uri)) return;
+    codeshareQueue.push(uri);
     saveCodeshareQueue();
     renderCodeshareQueue();
+}
+
+function addLocalScript() {
+    const name = els.localScriptSelect.value;
+    if (name) enqueueScript(LOCAL_PREFIX + name);
+}
+
+async function loadLocalScripts() {
+    try {
+        const { enabled, scripts } = await apiCall(API.LOCAL_SCRIPTS);
+        els.localScriptRow.classList.toggle('hidden', !enabled);
+        if (!enabled) return;
+        const select = els.localScriptSelect;
+        const previous = select.value;
+        select.replaceChildren(...(scripts.length
+            ? scripts.map(s => new Option(s, s))
+            : [new Option('No .js files in --scripts-dir', '', true, true)]));
+        if (!scripts.length) select.options[0].disabled = true;
+        if (scripts.includes(previous)) select.value = previous;
+    } catch (e) {
+        logConsole('Error', `Failed to list local scripts: ${e.message}`);
+    }
 }
 
 function removeCodeshare(index) {
@@ -1071,7 +1102,7 @@ async function loadCodeshareSequence() {
     setLoading(btn, true, 'Loading...');
     try {
         const currentAppSession = getCurrentAppSession();
-        logConsole('System', 'Loading CodeShare sequence...');
+        logConsole('System', 'Loading script queue...');
         for (const uri of codeshareQueue) {
             try {
                 logConsole('System', `Fetching ${uri}...`);
@@ -1544,6 +1575,8 @@ if (els.loadFileBtn && els.loadFileInput) {
 els.addCodeshareBtn.onclick = addCodeshare;
 els.loadCodeshareSequenceBtn.onclick = loadCodeshareSequence;
 els.codeshareUri.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCodeshare(); } });
+els.addLocalScriptBtn.onclick = addLocalScript;
+els.refreshLocalScriptsBtn.onclick = loadLocalScripts;
 // Bind console toggle
 els.toggleConsoleBtn.addEventListener('click', toggleConsoleMode);
 // Bind editor toggle
@@ -1555,4 +1588,5 @@ els.toggleEditorBtn.addEventListener('click', toggleEditorMode);
 // Init
 loadDevices();
 renderCodeshareQueue();
+loadLocalScripts();
 setupMonacoEditor();

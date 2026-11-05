@@ -114,10 +114,19 @@
                 <div id="controlsArea">
                     <!-- CodeShare Manager -->
                     <div class="codeshare-manager">
-                        <div class="panel-title">CodeShare Queue</div>
+                        <div class="panel-title">Script Queue</div>
                         <div class="codeshare-input-row">
                             <input id="codeshareUri" placeholder="URI (e.g. frida/android-ssl-pinning)" />
                             <button id="addCodeshareBtn" title="Add URI to CodeShare queue" type="button">
+                                Add
+                            </button>
+                        </div>
+                        <div id="localScriptRow" class="codeshare-input-row hidden">
+                            <select id="localScriptSelect" title="Scripts from --scripts-dir"></select>
+                            <button id="refreshLocalScriptsBtn" title="Refresh local scripts" type="button">
+                                ↻
+                            </button>
+                            <button id="addLocalScriptBtn" title="Add local script to queue" type="button">
                                 Add
                             </button>
                         </div>
@@ -144,8 +153,8 @@
                             Run Editor Script
                         </button>
                         <button id="loadCodeshareSequenceBtn" class="secondary"
-                            title="Run all scripts in the CodeShare queue in order">
-                            Run CodeShare Scripts
+                            title="Run all scripts in the script queue in order">
+                            Run Queued Scripts
                         </button>
                     </div>
                 </div>

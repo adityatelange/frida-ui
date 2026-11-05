@@ -27,6 +27,7 @@ setup(
         "fastapi",
         "uvicorn",
         "frida",
+        "frida-tools",
         "pydantic",
     ],
     entry_points={

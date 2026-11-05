@@ -1,16 +1,101 @@
 # This code is part of Frida-UI (https://github.com/adityatelange/frida-ui)
 
 import json
+import re
 import textwrap
 import threading
 import uuid
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import frida
+
+try:
+    import frida_tools
+except ImportError:
+    frida_tools = None
 
 
 class FridaError(RuntimeError):
     pass
+
+
+ANDROID_USER_RE = re.compile(r"^u(\d+)_")
+
+
+def _android_user(process) -> Optional[int]:
+    """Android user ID from a process owner such as u10_a123, else None."""
+    match = ANDROID_USER_RE.match(process.parameters.get("user") or "")
+    return int(match.group(1)) if match else None
+
+
+def _app_row(
+    identifier: str,
+    name: str,
+    pid: Optional[int] = None,
+    android_user: Optional[int] = None,
+) -> dict:
+    """Build an app list entry; `key` stays unique when a package runs under several users."""
+    return {
+        "key": f"{identifier}@u{android_user}" if android_user else identifier,
+        "identifier": identifier,
+        "name": f"{name} (u{android_user})" if android_user else name,
+        "pid": pid,
+        "android_user": android_user,
+    }
+
+
+def _profile_app_rows(procs, installed: List[dict]) -> List[dict]:
+    """Rows for processes of non-primary Android users (e.g. work profiles).
+
+    enumerate_applications() only covers the primary user, so these would otherwise be hidden.
+    """
+    labels = {a["identifier"]: a["name"] for a in installed}
+    rows = {}
+    # main process names have no ":" suffix; visit them first so they own the row's pid
+    for p in sorted(procs, key=lambda p: ":" in p.name):
+        user = _android_user(p)
+        base_name = p.name.split(":")[0]
+        package = next(iter(p.parameters.get("applications") or []), base_name)
+        if user and "." in package:
+            row = _app_row(package, labels.get(package, base_name), p.pid, user)
+            rows.setdefault(row["key"], row)
+    return sorted(rows.values(), key=lambda r: r["name"].lower())
+
+
+def _spawn_app(d, identifier: str, android_user: Optional[int] = None) -> int:
+    """Spawn by identifier; Frida's `uid` option takes the Android user ID."""
+    if android_user:
+        return d.spawn([identifier], uid=android_user)
+    try:
+        return d.spawn([identifier])
+    except TypeError:
+        return d.spawn(identifier)
+
+
+BRIDGE_NAMES = {"java", "objc", "swift"}
+
+
+def _bridge_reply(message: dict) -> Optional[dict]:
+    """Answer a lazy-bridge request from the injected loader, else None.
+
+    Frida 17+ no longer bundles the Java/ObjC/Swift bridges in GumJS; like the
+    frida-tools REPL, we serve the prebuilt bridges shipped inside frida-tools.
+    """
+    payload = message.get("payload") if message.get("type") == "send" else None
+    if not isinstance(payload, dict) or payload.get("type") != "frida:load-bridge":
+        return None
+    name = str(payload.get("name", "")).lower()
+    reply = {"type": "frida:bridge-loaded", "filename": f"{name}.js"}
+    try:
+        if name not in BRIDGE_NAMES or frida_tools is None:
+            raise FileNotFoundError("frida-tools is not installed (pip install frida-tools)")
+        bridge = Path(frida_tools.__file__).parent / "bridges" / reply["filename"]
+        reply["source"] = bridge.read_text(encoding="utf-8")
+    except Exception as e:
+        # the script blocks until a reply arrives, so always answer; surface the failure in-script
+        reply["source"] = f"throw new Error({json.dumps(f'Failed to load {name} bridge: {e}')});"
+    return reply
 
 
 class FridaManager:
@@ -140,8 +225,9 @@ class FridaManager:
 
         Tries to use Device.enumerate_applications() when available (typical on mobile
         devices). Falls back to heuristics over running processes if not available.
-        Each entry is a dict: {identifier, name, pid} where pid is set when the
-        app is currently running.
+        Each entry is a dict: {key, identifier, name, pid, android_user} where pid is
+        set when the app is currently running. Processes running under other Android
+        users (e.g. work profiles) are appended as extra entries.
         """
         d = self.get_device_by_id(device_id)
         apps: List[dict] = []
@@ -151,15 +237,14 @@ class FridaManager:
             installed = d.enumerate_applications()
             for a in installed:
                 apps.append(
-                    {
-                        "identifier": getattr(
+                    _app_row(
+                        getattr(
                             a, "identifier", getattr(a, "name", None) or str(a)
                         ),
-                        "name": getattr(
+                        getattr(
                             a, "name", getattr(a, "identifier", None) or str(a)
                         ),
-                        "pid": None,
-                    }
+                    )
                 )
         except Exception:
             # if enumerate_applications isn't available, we'll build a best-effort list
@@ -167,8 +252,9 @@ class FridaManager:
 
         # attach running pid information where possible
         try:
-            procs = d.enumerate_processes()
-            for p in procs:
+            procs = d.enumerate_processes(scope="metadata")
+            primary_procs = [p for p in procs if not _android_user(p)]
+            for p in primary_procs:
                 for app in apps:
                     if (
                         p.name == app["identifier"]
@@ -179,21 +265,20 @@ class FridaManager:
                         break
             # if we didn't get installed apps, try to infer common apps from process list
             if not apps:
-                for p in procs:
+                for p in primary_procs:
                     # heuristic: package-like names or capitalized names often represent apps
                     if "." in p.name or (p.name and p.name[0].isupper()):
-                        apps.append(
-                            {"identifier": p.name, "name": p.name, "pid": p.pid}
-                        )
+                        apps.append(_app_row(p.name, p.name, p.pid))
+            apps.extend(_profile_app_rows(procs, apps))
         except Exception:
             # ignore process enumeration errors
             pass
 
-        # deduplicate by identifier
+        # deduplicate by key
         seen = {}
         for a in apps:
-            if a["identifier"] not in seen:
-                seen[a["identifier"]] = a
+            if a["key"] not in seen:
+                seen[a["key"]] = a
         return list(seen.values())
 
     def attach(self, device_id: str, target: str):
@@ -224,17 +309,16 @@ class FridaManager:
         except Exception as e:
             raise FridaError(f"Failed to attach to {target} (pid: {pid}): {e}")
 
-    def spawn_and_attach(self, device_id: str, identifier: str):
+    def spawn_and_attach(
+        self, device_id: str, identifier: str, android_user: Optional[int] = None
+    ):
         """Spawn an installed application by identifier and attach to it.
 
         Returns a tuple (session_id, pid).
         """
         d = self.get_device_by_id(device_id)
         try:
-            try:
-                pid = d.spawn([identifier])
-            except TypeError:
-                pid = d.spawn(identifier)
+            pid = _spawn_app(d, identifier, android_user)
 
             # attach to the spawned pid
             session = d.attach(pid)
@@ -255,17 +339,20 @@ class FridaManager:
         except Exception as e:
             raise FridaError(f"Failed to spawn and attach to {identifier}: {e}")
 
-    def spawn_and_run(self, device_id: str, identifier: str, script_source: str):
+    def spawn_and_run(
+        self,
+        device_id: str,
+        identifier: str,
+        script_source: str,
+        android_user: Optional[int] = None,
+    ):
         """Spawn, attach, load script, and THEN resume.
 
         This ensures the script is running from the very beginning of the process.
         """
         d = self.get_device_by_id(device_id)
         try:
-            try:
-                pid = d.spawn([identifier])
-            except TypeError:
-                pid = d.spawn(identifier)
+            pid = _spawn_app(d, identifier, android_user)
 
             session = d.attach(pid)
             session_id = str(uuid.uuid4())
@@ -288,15 +375,16 @@ class FridaManager:
             raise FridaError(f"Failed to spawn and run {identifier}: {e}")
 
     def spawn_and_run_with_payload(
-        self, device_id: str, identifier: str, final_script: str
+        self,
+        device_id: str,
+        identifier: str,
+        final_script: str,
+        android_user: Optional[int] = None,
     ):
         """Spawn, attach, inject the provided final_script (assumed to be valid JS), then resume."""
         d = self.get_device_by_id(device_id)
         try:
-            try:
-                pid = d.spawn([identifier])
-            except TypeError:
-                pid = d.spawn(identifier)
+            pid = _spawn_app(d, identifier, android_user)
 
             session = d.attach(pid)
             session_id = str(uuid.uuid4())
@@ -375,8 +463,21 @@ class FridaManager:
                 function safe_serialize(v) {
                     try { return JSON.stringify(v); } catch (e) { try { return String(v); } catch (e2) { return '<unserializable>'; } }
                 }
+                // match frida's own console: JSON only for plain objects/arrays (String() would give [object Object]),
+                // String() for everything with its own toString - java/objc wrappers (calls java toString()), Error, NativePointer.
+                // JSON.stringify of a java wrapper only yields '<instance: okhttp3.Request>'.
+                function format_arg(a) {
+                    if (typeof a === 'string') return a;
+                    if (a === null || a === undefined) return String(a);
+                    if (a instanceof ArrayBuffer) { try { return hexdump(a); } catch (e) { } }
+                    if (typeof a === 'object') {
+                        var proto = Object.getPrototypeOf(a);
+                        if (Array.isArray(a) || proto === Object.prototype || proto === null) return safe_serialize(a);
+                    }
+                    try { return String(a); } catch (e) { return safe_serialize(a); }
+                }
                 function forward(level, args) {
-                    try { send({ __console: { level: level, payload: args.map(function (a) { try { return (typeof a === 'object') ? safe_serialize(a) : String(a); } catch (e) { return String(a); } }) } }); } catch (e) { }
+                    try { send({ __console: { level: level, payload: args.map(format_arg) } }); } catch (e) { }
                 }
                 // Replace console methods and DO NOT call the originals to avoid printing to stdout.
                 console.log = function () { forward('log', Array.prototype.slice.call(arguments)); };
@@ -386,12 +487,42 @@ class FridaManager:
             })();
             """
         ).strip()
-        wrapped_source = console_forwarder + "\n" + script_source
+        # Frida 17+ removed the built-in Java/ObjC/Swift globals; define lazy getters that
+        # request the bridge from the host on first use (same protocol as frida-tools' REPL).
+        bridge_loader = textwrap.dedent(
+            """
+            ['ObjC', 'Swift', 'Java'].forEach(function (name) {
+                if (name in globalThis) return;
+                Object.defineProperty(globalThis, name, {
+                    enumerable: true,
+                    configurable: true,
+                    get: function () {
+                        send({ type: 'frida:load-bridge', name: name });
+                        var bridge;
+                        recv('frida:bridge-loaded', function (message) {
+                            bridge = Script.evaluate('/frida/bridges/' + message.filename,
+                                '(function () { ' + [
+                                    message.source,
+                                    "Object.defineProperty(globalThis, '" + name + "', { value: bridge });",
+                                    'return bridge;'
+                                ].join('\\n') + ' })();');
+                        }).wait();
+                        return bridge;
+                    }
+                });
+            });
+            """
+        ).strip()
+        wrapped_source = "\n".join([console_forwarder, bridge_loader, script_source])
         script = session.create_script(wrapped_source)
         script_id = str(uuid.uuid4())
         self.message_queues[script_id] = []
 
         def on_message(message, data):
+            reply = _bridge_reply(message)
+            if reply:
+                script.post(reply)
+                return
             entry = {"message": message, "data": data}
             # store message
             with self.lock:

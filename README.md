@@ -48,7 +48,7 @@ Open your browser and navigate to: `http://localhost:8000`
 - **Download script**: Export the current editor content as a `.js` file (`frida-ui_<app id>_<timestamp>.js`) directly from the editor header.
 - **CodeShare Integration**:
   - Import scripts directly from [Frida CodeShare](https://codeshare.frida.re/).
-  - **CodeShare Queue**: Queue multiple CodeShare scripts to be loaded and executed automatically during **Spawn & Run** or manually via the "Run CodeShare Scripts" button.
+  - **Script Queue**: Queue multiple CodeShare scripts and local scripts (from `--scripts-dir`) to be loaded and executed automatically during **Spawn & Run** or manually via the "Run Queued Scripts" button. Local scripts are re-read from disk on every run.
 
 ### 📊 Console & Logging
 
@@ -111,12 +111,13 @@ frida-ui
 Or with custom options:
 
 ```bash
-frida-ui --host 127.0.0.1 --port 8000 --reload
+frida-ui --host 127.0.0.1 --port 8000 --reload --scripts-dir ./my-scripts
 ```
 
 - `--host`: Specify the host (default: 127.0.0.1)
 - `--port`: Specify the port (default: 8000)
 - `--reload`: Enable auto-reload for development
+- `--scripts-dir`: Folder of local `.js` scripts (searched recursively) that can be added to the script queue
 
 Open **http://localhost:8000** in your browser.
 
@@ -171,7 +172,7 @@ Alternatively, you can run `frida-server` with a network listener and connect re
 3. **Write/Load Script**:
    - Type JS in the editor.
    - Or drag & drop a file.
-   - Or add scripts URL from CodeShare.
+   - Or add scripts URL from CodeShare, or local scripts from `--scripts-dir`, to the script queue.
 4. **Action**:
    - Click **Attach** to inject into a running process.
    - Click **Spawn** to start the app.
