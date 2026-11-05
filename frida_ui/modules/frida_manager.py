@@ -5,9 +5,15 @@ import re
 import textwrap
 import threading
 import uuid
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import frida
+
+try:
+    import frida_tools
+except ImportError:
+    frida_tools = None
 
 
 class FridaError(RuntimeError):
@@ -65,6 +71,31 @@ def _spawn_app(d, identifier: str, android_user: Optional[int] = None) -> int:
         return d.spawn([identifier])
     except TypeError:
         return d.spawn(identifier)
+
+
+BRIDGE_NAMES = {"java", "objc", "swift"}
+
+
+def _bridge_reply(message: dict) -> Optional[dict]:
+    """Answer a lazy-bridge request from the injected loader, else None.
+
+    Frida 17+ no longer bundles the Java/ObjC/Swift bridges in GumJS; like the
+    frida-tools REPL, we serve the prebuilt bridges shipped inside frida-tools.
+    """
+    payload = message.get("payload") if message.get("type") == "send" else None
+    if not isinstance(payload, dict) or payload.get("type") != "frida:load-bridge":
+        return None
+    name = str(payload.get("name", "")).lower()
+    reply = {"type": "frida:bridge-loaded", "filename": f"{name}.js"}
+    try:
+        if name not in BRIDGE_NAMES or frida_tools is None:
+            raise FileNotFoundError("frida-tools is not installed (pip install frida-tools)")
+        bridge = Path(frida_tools.__file__).parent / "bridges" / reply["filename"]
+        reply["source"] = bridge.read_text(encoding="utf-8")
+    except Exception as e:
+        # the script blocks until a reply arrives, so always answer; surface the failure in-script
+        reply["source"] = f"throw new Error({json.dumps(f'Failed to load {name} bridge: {e}')});"
+    return reply
 
 
 class FridaManager:
@@ -443,12 +474,42 @@ class FridaManager:
             })();
             """
         ).strip()
-        wrapped_source = console_forwarder + "\n" + script_source
+        # Frida 17+ removed the built-in Java/ObjC/Swift globals; define lazy getters that
+        # request the bridge from the host on first use (same protocol as frida-tools' REPL).
+        bridge_loader = textwrap.dedent(
+            """
+            ['ObjC', 'Swift', 'Java'].forEach(function (name) {
+                if (name in globalThis) return;
+                Object.defineProperty(globalThis, name, {
+                    enumerable: true,
+                    configurable: true,
+                    get: function () {
+                        send({ type: 'frida:load-bridge', name: name });
+                        var bridge;
+                        recv('frida:bridge-loaded', function (message) {
+                            bridge = Script.evaluate('/frida/bridges/' + message.filename,
+                                '(function () { ' + [
+                                    message.source,
+                                    "Object.defineProperty(globalThis, '" + name + "', { value: bridge });",
+                                    'return bridge;'
+                                ].join('\\n') + ' })();');
+                        }).wait();
+                        return bridge;
+                    }
+                });
+            });
+            """
+        ).strip()
+        wrapped_source = "\n".join([console_forwarder, bridge_loader, script_source])
         script = session.create_script(wrapped_source)
         script_id = str(uuid.uuid4())
         self.message_queues[script_id] = []
 
         def on_message(message, data):
+            reply = _bridge_reply(message)
+            if reply:
+                script.post(reply)
+                return
             entry = {"message": message, "data": data}
             # store message
             with self.lock:
