@@ -622,6 +622,11 @@ textarea#scriptArea:focus+.editor-hint,
     min-height: 120px;
 }
 
+/* Extra row for --scripts-dir; keep the queue list at its original height */
+#controlsArea:has(#localScriptRow:not(.hidden)) {
+    min-height: 155px;
+}
+
 /* CodeShare Manager */
 .codeshare-manager {
     flex: 1;
@@ -635,13 +640,19 @@ textarea#scriptArea:focus+.editor-hint,
     gap: 5px;
 }
 
-#codeshareUri {
+#codeshareUri,
+#localScriptSelect {
     flex: 1;
     padding: 6px;
     background: var(--input-bg-dark);
     border: 1px solid var(--border-color);
     color: var(--text-bright);
     border-radius: 3px;
+}
+
+#localScriptSelect {
+    min-width: 0;
+    padding: 0 6px;
 }
 
 #codeshareList {

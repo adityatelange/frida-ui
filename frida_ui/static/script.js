@@ -4,7 +4,7 @@
 let appSessions = {}; // { appIdentifier: { sessionId, scriptIds, consoleLog, pollInterval } }
 let allApps = []; // List of all apps for the selected device
 let selectedApp = null; // Currently selected app
-let codeshareQueue = []; // Queue of codeshare URIs to load with next script run
+let codeshareQueue = []; // Queue of codeshare URIs / local:<path> entries to load with next script run
 let deviceCache = {}; // Cache for device info including parameters
 let monacoEditor = null; // Monaco editor instance
 
@@ -14,6 +14,7 @@ const SEARCH_KEY = 'frida-ui-app-search';
 const SELECTED_APP_KEY = 'frida-ui-selected-app';
 const SELECTED_DEVICE_KEY = 'frida-ui-selected-device';
 const APP_LIST_SCROLL_KEY = 'frida-ui-app-list-scroll';
+const LOCAL_PREFIX = 'local:';
 
 // DOM Elements
 const els = {
@@ -57,7 +58,11 @@ const els = {
     toggleRemoteBtn: document.getElementById('toggleRemoteBtn'),
     cancelRemoteBtn: document.getElementById('cancelRemoteBtn'),
     addCodeshareBtn: document.getElementById('addCodeshareBtn'),
-    loadCodeshareSequenceBtn: document.getElementById('loadCodeshareSequenceBtn')
+    loadCodeshareSequenceBtn: document.getElementById('loadCodeshareSequenceBtn'),
+    localScriptRow: document.getElementById('localScriptRow'),
+    localScriptSelect: document.getElementById('localScriptSelect'),
+    refreshLocalScriptsBtn: document.getElementById('refreshLocalScriptsBtn'),
+    addLocalScriptBtn: document.getElementById('addLocalScriptBtn')
 };
 
 // --- API Endpoints ---
@@ -74,7 +79,8 @@ const API = {
     SCRIPT: '/api/script',
     SESSION_ALIVE: (sessionId) => `/api/session/${sessionId}/alive`,
     SCRIPT_MESSAGES: (scriptId) => `/api/scripts/${scriptId}/messages?clear=true`,
-    CODESHARE_LOAD: '/api/codeshare/load'
+    CODESHARE_LOAD: '/api/codeshare/load',
+    LOCAL_SCRIPTS: '/api/local_scripts'
 };
 
 // --- API Helpers ---
@@ -956,7 +962,7 @@ function renderCodeshareQueue() {
     list.innerHTML = '';
 
     if (codeshareQueue.length === 0) {
-        list.innerHTML = '<div class="status-msg">No scripts in queue. Add a CodeShare URI above.</div>';
+        list.innerHTML = '<div class="status-msg">No scripts in queue. Add a CodeShare URI or local script above.</div>';
         return;
     }
 
@@ -1030,15 +1036,37 @@ function addCodeshare() {
         return;
     }
 
-    if (codeshareQueue.includes(uri)) {
-        input.value = '';
-        return;
-    }
-
-    codeshareQueue.push(uri);
+    enqueueScript(uri);
     input.value = '';
+}
+
+function enqueueScript(uri) {
+    if (codeshareQueue.includes(uri)) return;
+    codeshareQueue.push(uri);
     saveCodeshareQueue();
     renderCodeshareQueue();
+}
+
+function addLocalScript() {
+    const name = els.localScriptSelect.value;
+    if (name) enqueueScript(LOCAL_PREFIX + name);
+}
+
+async function loadLocalScripts() {
+    try {
+        const { enabled, scripts } = await apiCall(API.LOCAL_SCRIPTS);
+        els.localScriptRow.classList.toggle('hidden', !enabled);
+        if (!enabled) return;
+        const select = els.localScriptSelect;
+        const previous = select.value;
+        select.replaceChildren(...(scripts.length
+            ? scripts.map(s => new Option(s, s))
+            : [new Option('No .js files in --scripts-dir', '', true, true)]));
+        if (!scripts.length) select.options[0].disabled = true;
+        if (scripts.includes(previous)) select.value = previous;
+    } catch (e) {
+        logConsole('Error', `Failed to list local scripts: ${e.message}`);
+    }
 }
 
 function removeCodeshare(index) {
@@ -1074,7 +1102,7 @@ async function loadCodeshareSequence() {
     setLoading(btn, true, 'Loading...');
     try {
         const currentAppSession = getCurrentAppSession();
-        logConsole('System', 'Loading CodeShare sequence...');
+        logConsole('System', 'Loading script queue...');
         for (const uri of codeshareQueue) {
             try {
                 logConsole('System', `Fetching ${uri}...`);
@@ -1547,6 +1575,8 @@ if (els.loadFileBtn && els.loadFileInput) {
 els.addCodeshareBtn.onclick = addCodeshare;
 els.loadCodeshareSequenceBtn.onclick = loadCodeshareSequence;
 els.codeshareUri.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCodeshare(); } });
+els.addLocalScriptBtn.onclick = addLocalScript;
+els.refreshLocalScriptsBtn.onclick = loadLocalScripts;
 // Bind console toggle
 els.toggleConsoleBtn.addEventListener('click', toggleConsoleMode);
 // Bind editor toggle
@@ -1558,4 +1588,5 @@ els.toggleEditorBtn.addEventListener('click', toggleEditorMode);
 // Init
 loadDevices();
 renderCodeshareQueue();
+loadLocalScripts();
 setupMonacoEditor();

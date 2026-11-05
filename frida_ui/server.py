@@ -11,7 +11,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from frida_ui.modules.frida_manager import FridaError, FridaManager
-from frida_ui.modules.codeshare import fetch_codeshare_script
+from frida_ui.modules.script_sources import (
+    SCRIPTS_DIR_ENV,
+    fetch_script_source,
+    get_scripts_dir,
+    list_local_scripts,
+)
 
 app = FastAPI(title="frida-ui")
 # static files live next to this module in "static/"
@@ -110,6 +115,17 @@ def spawn(req: SpawnRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+def _load_queued_source(uri: str) -> str:
+    """Fetch a queued script (CodeShare URI or 'local:' path), mapping failures to FridaError."""
+    try:
+        source = fetch_script_source(uri)
+    except (ValueError, RuntimeError, OSError) as e:
+        raise FridaError(str(e))
+    if not source:
+        raise FridaError(f"Script source empty or not found for: {uri}")
+    return source
+
+
 class SpawnAndRunRequest(BaseModel):
     device_id: str
     identifier: str
@@ -120,19 +136,12 @@ class SpawnAndRunRequest(BaseModel):
 
 @app.post("/api/spawn_and_run")
 def spawn_and_run(req: SpawnAndRunRequest):
-    """Spawn, attach, load script (including optional CodeShare queue), and resume."""
+    """Spawn, attach, load script (including optional script queue), and resume."""
     try:
-        # If Codeshare URIs are provided, fetch them and compose final payload
+        # If queued URIs are provided, fetch them and compose final payload
         final_script = req.script or ""
         if req.codeshare_uris:
-            parts = []
-            for uri in req.codeshare_uris:
-                source = fetch_codeshare_script(uri)
-                if not source:
-                    raise FridaError(
-                        f"Script source not found on codeshare for uri: {uri}"
-                    )
-                parts.append(source)
+            parts = [_load_queued_source(uri) for uri in req.codeshare_uris]
 
             if final_script.strip():
                 parts.append(final_script)
@@ -174,16 +183,20 @@ def create_script(req: ScriptRequest):
 
 class CodeShareRequest(BaseModel):
     session_id: str
-    uri: str  # owner/slug or full /api/project/... url
+    uri: str  # CodeShare owner/slug, full codeshare url, or local:<path in --scripts-dir>
+
+
+@app.get("/api/local_scripts")
+def local_scripts():
+    """List .js files available under --scripts-dir (paths relative to it)."""
+    return {"enabled": get_scripts_dir() is not None, "scripts": list_local_scripts()}
 
 
 @app.post("/api/codeshare/load")
 def load_codeshare(req: CodeShareRequest):
-    """Load a script from codeshare.frida.re and create it for the given session."""
+    """Load a queued script (CodeShare or local) and create it for the given session."""
     try:
-        source = fetch_codeshare_script(req.uri)
-        if not source:
-            raise FridaError("Script source not found on codeshare for uri: " + req.uri)
+        source = _load_queued_source(req.uri)
         script_id = frida_mgr.create_script(req.session_id, source)
         return {"script_id": script_id}
     except FridaError as e:
@@ -239,12 +252,24 @@ def main():
         action="store_true",
         help="Enable auto-reload on code changes (development)",
     )
+    parser.add_argument(
+        "--scripts-dir",
+        help="Folder of local .js scripts (searched recursively) to offer in the script queue",
+    )
     args = parser.parse_args()
+
+    if args.scripts_dir:
+        scripts_dir = os.path.abspath(args.scripts_dir)
+        if not os.path.isdir(scripts_dir):
+            parser.error(f"--scripts-dir is not a directory: {scripts_dir}")
+        os.environ[SCRIPTS_DIR_ENV] = scripts_dir
 
     print(
         f"[+] Starting frida-ui on http://{args.host}:{args.port} {'with reload' if args.reload else ''}"
     )
     print(f"[+] Using Frida version: {frida_mgr.version}")
+    if args.scripts_dir:
+        print(f"[+] Serving local scripts from: {os.environ[SCRIPTS_DIR_ENV]}")
     print("[+] Press CTRL+C to stop the server")
 
     log_level = "debug" if args.reload else "info"
