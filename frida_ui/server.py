@@ -2,7 +2,7 @@
 
 import argparse
 import os
-from typing import List
+from typing import List, Optional
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -95,13 +95,16 @@ def attach(req: AttachRequest):
 class SpawnRequest(BaseModel):
     device_id: str
     identifier: str
+    android_user: Optional[int] = None
 
 
 @app.post("/api/spawn")
 def spawn(req: SpawnRequest):
     """Spawn an installed app on the device and attach to it."""
     try:
-        sid, pid = frida_mgr.spawn_and_attach(req.device_id, req.identifier)
+        sid, pid = frida_mgr.spawn_and_attach(
+            req.device_id, req.identifier, req.android_user
+        )
         return {"session_id": sid, "pid": pid}
     except FridaError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -112,6 +115,7 @@ class SpawnAndRunRequest(BaseModel):
     identifier: str
     script: str
     codeshare_uris: List[str] = []
+    android_user: Optional[int] = None
 
 
 @app.post("/api/spawn_and_run")
@@ -137,7 +141,7 @@ def spawn_and_run(req: SpawnAndRunRequest):
             final_script = "\n\n".join(parts)
 
         sid, pid, script_id = frida_mgr.spawn_and_run_with_payload(
-            req.device_id, req.identifier, final_script
+            req.device_id, req.identifier, final_script, req.android_user
         )
         return {"session_id": sid, "pid": pid, "script_id": script_id}
     except FridaError as e:

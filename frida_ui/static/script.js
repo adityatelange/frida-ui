@@ -103,20 +103,20 @@ function escapeHtml(text) {
 // --- Remote Device Functions ---
 function getCurrentAppSession() {
     if (!selectedApp) return null;
-    return appSessions[selectedApp.identifier] || null;
+    return appSessions[selectedApp.key] || null;
 }
 
 function ensureAppSession() {
     if (!selectedApp) return null;
-    if (!appSessions[selectedApp.identifier]) {
-        appSessions[selectedApp.identifier] = {
+    if (!appSessions[selectedApp.key]) {
+        appSessions[selectedApp.key] = {
             sessionId: null,
             scriptIds: [],
             consoleLog: [],
             pollInterval: null
         };
     }
-    return appSessions[selectedApp.identifier];
+    return appSessions[selectedApp.key];
 }
 
 /* START Remote Device Management */
@@ -292,7 +292,7 @@ async function loadApps() {
 
         // Update selectedApp state if it exists in the new list
         if (selectedApp) {
-            const updatedApp = allApps.find(a => a.identifier === selectedApp.identifier);
+            const updatedApp = allApps.find(a => a.key === selectedApp.key);
             if (updatedApp) {
                 selectedApp = updatedApp;
                 // Update UI elements that depend on selectedApp
@@ -330,7 +330,8 @@ function renderApps() {
     filtered.forEach(app => {
         const div = document.createElement('div');
         div.className = 'app-item';
-        if (selectedApp && selectedApp.identifier === app.identifier) div.classList.add('active');
+        div.dataset.key = app.key;
+        if (selectedApp && selectedApp.key === app.key) div.classList.add('active');
         div.innerHTML = `
                     <div>
                         <span class="app-name">${escapeHtml(app.name)}</span>
@@ -352,8 +353,8 @@ function renderApps() {
 
 function selectApp(app, persist = true) {
     // Stop polling for previous app if any
-    if (selectedApp && selectedApp.identifier !== app.identifier) {
-        const prevSession = appSessions[selectedApp.identifier];
+    if (selectedApp && selectedApp.key !== app.key) {
+        const prevSession = appSessions[selectedApp.key];
         if (prevSession && prevSession.pollInterval) {
             clearTimeout(prevSession.pollInterval);
             prevSession.pollInterval = null;
@@ -367,7 +368,7 @@ function deselectApp() {
     if (!selectedApp) return;
 
     // Stop polling
-    const appSession = appSessions[selectedApp.identifier];
+    const appSession = appSessions[selectedApp.key];
     if (appSession && appSession.pollInterval) {
         clearTimeout(appSession.pollInterval);
         appSession.pollInterval = null;
@@ -615,7 +616,7 @@ async function doAttach() {
         selectedApp.pid = res.pid;
         // Update app list UI to show running badge
         const appItem = Array.from(els.appList.children).find(el =>
-            el.querySelector('.app-id').textContent === selectedApp.identifier
+            el.dataset.key === selectedApp.key
         );
         if (appItem) {
             const badgeContainer = appItem.children[1];
@@ -629,7 +630,7 @@ async function doAttach() {
         // Clear PID and any session state
         selectedApp.pid = null;
         els.sessionPid.textContent = 'Not Running';
-        const appSession = appSessions[selectedApp.identifier];
+        const appSession = appSessions[selectedApp.key];
         if (appSession) {
             appSession.sessionId = null;
             appSession.scriptIds = [];
@@ -653,14 +654,15 @@ async function doSpawn() {
         const devId = els.devices.value;
         const res = await apiCall(API.SPAWN, 'POST', {
             device_id: devId,
-            identifier: selectedApp.identifier
+            identifier: selectedApp.identifier,
+            android_user: selectedApp.android_user
         });
 
         // Update app state to running
         selectedApp.pid = res.pid;
         // Update app list UI to show running badge
         const appItem = Array.from(els.appList.children).find(el =>
-            el.querySelector('.app-id').textContent === selectedApp.identifier
+            el.dataset.key === selectedApp.key
         );
         if (appItem) {
             const badgeContainer = appItem.children[1];
@@ -686,6 +688,7 @@ async function doSpawnAndRun() {
         const res = await apiCall(API.SPAWN_AND_RUN, 'POST', {
             device_id: devId,
             identifier: selectedApp.identifier,
+            android_user: selectedApp.android_user,
             script: code,
             codeshare_uris: codeshareQueue
         });
@@ -694,7 +697,7 @@ async function doSpawnAndRun() {
         selectedApp.pid = res.pid;
         // Update app list UI to show running badge
         const appItem = Array.from(els.appList.children).find(el =>
-            el.querySelector('.app-id').textContent === selectedApp.identifier
+            el.dataset.key === selectedApp.key
         );
         if (appItem) {
             const badgeContainer = appItem.children[1];
@@ -744,7 +747,7 @@ async function killApp() {
         // Clear PID and any session state
         selectedApp.pid = null;
         els.sessionPid.textContent = 'Not Running';
-        const appSession = appSessions[selectedApp.identifier];
+        const appSession = appSessions[selectedApp.key];
         if (appSession) {
             appSession.sessionId = null;
             appSession.scriptIds = [];

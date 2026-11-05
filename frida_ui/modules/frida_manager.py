@@ -1,16 +1,70 @@
 # This code is part of Frida-UI (https://github.com/adityatelange/frida-ui)
 
 import json
+import re
 import textwrap
 import threading
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import frida
 
 
 class FridaError(RuntimeError):
     pass
+
+
+ANDROID_USER_RE = re.compile(r"^u(\d+)_")
+
+
+def _android_user(process) -> Optional[int]:
+    """Android user ID from a process owner such as u10_a123, else None."""
+    match = ANDROID_USER_RE.match(process.parameters.get("user") or "")
+    return int(match.group(1)) if match else None
+
+
+def _app_row(
+    identifier: str,
+    name: str,
+    pid: Optional[int] = None,
+    android_user: Optional[int] = None,
+) -> dict:
+    """Build an app list entry; `key` stays unique when a package runs under several users."""
+    return {
+        "key": f"{identifier}@u{android_user}" if android_user else identifier,
+        "identifier": identifier,
+        "name": f"{name} (u{android_user})" if android_user else name,
+        "pid": pid,
+        "android_user": android_user,
+    }
+
+
+def _profile_app_rows(procs, installed: List[dict]) -> List[dict]:
+    """Rows for processes of non-primary Android users (e.g. work profiles).
+
+    enumerate_applications() only covers the primary user, so these would otherwise be hidden.
+    """
+    labels = {a["identifier"]: a["name"] for a in installed}
+    rows = {}
+    # main process names have no ":" suffix; visit them first so they own the row's pid
+    for p in sorted(procs, key=lambda p: ":" in p.name):
+        user = _android_user(p)
+        base_name = p.name.split(":")[0]
+        package = next(iter(p.parameters.get("applications") or []), base_name)
+        if user and "." in package:
+            row = _app_row(package, labels.get(package, base_name), p.pid, user)
+            rows.setdefault(row["key"], row)
+    return sorted(rows.values(), key=lambda r: r["name"].lower())
+
+
+def _spawn_app(d, identifier: str, android_user: Optional[int] = None) -> int:
+    """Spawn by identifier; Frida's `uid` option takes the Android user ID."""
+    if android_user:
+        return d.spawn([identifier], uid=android_user)
+    try:
+        return d.spawn([identifier])
+    except TypeError:
+        return d.spawn(identifier)
 
 
 class FridaManager:
@@ -140,8 +194,9 @@ class FridaManager:
 
         Tries to use Device.enumerate_applications() when available (typical on mobile
         devices). Falls back to heuristics over running processes if not available.
-        Each entry is a dict: {identifier, name, pid} where pid is set when the
-        app is currently running.
+        Each entry is a dict: {key, identifier, name, pid, android_user} where pid is
+        set when the app is currently running. Processes running under other Android
+        users (e.g. work profiles) are appended as extra entries.
         """
         d = self.get_device_by_id(device_id)
         apps: List[dict] = []
@@ -151,15 +206,14 @@ class FridaManager:
             installed = d.enumerate_applications()
             for a in installed:
                 apps.append(
-                    {
-                        "identifier": getattr(
+                    _app_row(
+                        getattr(
                             a, "identifier", getattr(a, "name", None) or str(a)
                         ),
-                        "name": getattr(
+                        getattr(
                             a, "name", getattr(a, "identifier", None) or str(a)
                         ),
-                        "pid": None,
-                    }
+                    )
                 )
         except Exception:
             # if enumerate_applications isn't available, we'll build a best-effort list
@@ -167,8 +221,9 @@ class FridaManager:
 
         # attach running pid information where possible
         try:
-            procs = d.enumerate_processes()
-            for p in procs:
+            procs = d.enumerate_processes(scope="metadata")
+            primary_procs = [p for p in procs if not _android_user(p)]
+            for p in primary_procs:
                 for app in apps:
                     if (
                         p.name == app["identifier"]
@@ -179,21 +234,20 @@ class FridaManager:
                         break
             # if we didn't get installed apps, try to infer common apps from process list
             if not apps:
-                for p in procs:
+                for p in primary_procs:
                     # heuristic: package-like names or capitalized names often represent apps
                     if "." in p.name or (p.name and p.name[0].isupper()):
-                        apps.append(
-                            {"identifier": p.name, "name": p.name, "pid": p.pid}
-                        )
+                        apps.append(_app_row(p.name, p.name, p.pid))
+            apps.extend(_profile_app_rows(procs, apps))
         except Exception:
             # ignore process enumeration errors
             pass
 
-        # deduplicate by identifier
+        # deduplicate by key
         seen = {}
         for a in apps:
-            if a["identifier"] not in seen:
-                seen[a["identifier"]] = a
+            if a["key"] not in seen:
+                seen[a["key"]] = a
         return list(seen.values())
 
     def attach(self, device_id: str, target: str):
@@ -224,17 +278,16 @@ class FridaManager:
         except Exception as e:
             raise FridaError(f"Failed to attach to {target} (pid: {pid}): {e}")
 
-    def spawn_and_attach(self, device_id: str, identifier: str):
+    def spawn_and_attach(
+        self, device_id: str, identifier: str, android_user: Optional[int] = None
+    ):
         """Spawn an installed application by identifier and attach to it.
 
         Returns a tuple (session_id, pid).
         """
         d = self.get_device_by_id(device_id)
         try:
-            try:
-                pid = d.spawn([identifier])
-            except TypeError:
-                pid = d.spawn(identifier)
+            pid = _spawn_app(d, identifier, android_user)
 
             # attach to the spawned pid
             session = d.attach(pid)
@@ -255,17 +308,20 @@ class FridaManager:
         except Exception as e:
             raise FridaError(f"Failed to spawn and attach to {identifier}: {e}")
 
-    def spawn_and_run(self, device_id: str, identifier: str, script_source: str):
+    def spawn_and_run(
+        self,
+        device_id: str,
+        identifier: str,
+        script_source: str,
+        android_user: Optional[int] = None,
+    ):
         """Spawn, attach, load script, and THEN resume.
 
         This ensures the script is running from the very beginning of the process.
         """
         d = self.get_device_by_id(device_id)
         try:
-            try:
-                pid = d.spawn([identifier])
-            except TypeError:
-                pid = d.spawn(identifier)
+            pid = _spawn_app(d, identifier, android_user)
 
             session = d.attach(pid)
             session_id = str(uuid.uuid4())
@@ -288,15 +344,16 @@ class FridaManager:
             raise FridaError(f"Failed to spawn and run {identifier}: {e}")
 
     def spawn_and_run_with_payload(
-        self, device_id: str, identifier: str, final_script: str
+        self,
+        device_id: str,
+        identifier: str,
+        final_script: str,
+        android_user: Optional[int] = None,
     ):
         """Spawn, attach, inject the provided final_script (assumed to be valid JS), then resume."""
         d = self.get_device_by_id(device_id)
         try:
-            try:
-                pid = d.spawn([identifier])
-            except TypeError:
-                pid = d.spawn(identifier)
+            pid = _spawn_app(d, identifier, android_user)
 
             session = d.attach(pid)
             session_id = str(uuid.uuid4())
