@@ -463,8 +463,21 @@ class FridaManager:
                 function safe_serialize(v) {
                     try { return JSON.stringify(v); } catch (e) { try { return String(v); } catch (e2) { return '<unserializable>'; } }
                 }
+                // match frida's own console: JSON only for plain objects/arrays (String() would give [object Object]),
+                // String() for everything with its own toString - java/objc wrappers (calls java toString()), Error, NativePointer.
+                // JSON.stringify of a java wrapper only yields '<instance: okhttp3.Request>'.
+                function format_arg(a) {
+                    if (typeof a === 'string') return a;
+                    if (a === null || a === undefined) return String(a);
+                    if (a instanceof ArrayBuffer) { try { return hexdump(a); } catch (e) { } }
+                    if (typeof a === 'object') {
+                        var proto = Object.getPrototypeOf(a);
+                        if (Array.isArray(a) || proto === Object.prototype || proto === null) return safe_serialize(a);
+                    }
+                    try { return String(a); } catch (e) { return safe_serialize(a); }
+                }
                 function forward(level, args) {
-                    try { send({ __console: { level: level, payload: args.map(function (a) { try { return (typeof a === 'object') ? safe_serialize(a) : String(a); } catch (e) { return String(a); } }) } }); } catch (e) { }
+                    try { send({ __console: { level: level, payload: args.map(format_arg) } }); } catch (e) { }
                 }
                 // Replace console methods and DO NOT call the originals to avoid printing to stdout.
                 console.log = function () { forward('log', Array.prototype.slice.call(arguments)); };
